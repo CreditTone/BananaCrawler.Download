@@ -27,6 +27,7 @@ import com.banana.common.NodeStatus;
 import com.banana.common.PropertiesNamespace;
 import com.banana.common.download.IDownload;
 import com.banana.common.master.ICrawlerMasterServer;
+import com.banana.common.util.SystemUtil;
 import com.banana.component.PageProcessor;
 import com.banana.component.PageScript;
 import com.banana.downloader.JavaScriptDownloader;
@@ -85,19 +86,18 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 			}
 			Page page = defaultPageDownloader.download(pageRequest,taskName);
 			logger.info("抓取:"+pageRequest.getUrl()+"\tStatus:"+page.getStatus()+"\tCode:"+page.getStatusCode());
-			offlineHandle(pageProccess, page);
+			offlineHandle(taskName,pageProccess, page);
 			break;
 		case TRANSACTION_REQUEST:
-			TransactionRequest transactionRequest = (TransactionRequest)finalRequest;
+			TransactionRequest transactionRequest = (TransactionRequest) request;
 			Iterator<BasicRequest> basicRequestIter = transactionRequest.iteratorChildRequest();
 			while(basicRequestIter.hasNext()){
 				BasicRequest child = basicRequestIter.next();
-				invokeDownload(child, finalContext);
+				dowloadLink(taskName, child);
 			}
 			break;
 		case BINARY_REQUEST:
-			initFileDownloadInstance();
-			defaultFileDownloader.downloadFile((BinaryRequest) finalRequest);
+			defaultFileDownloader.downloadFile((BinaryRequest) request);
 			break;
 		}
 		return false;
@@ -166,17 +166,17 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 						pushRequest(taskName,Arrays.asList((BasicRequest)retryRequest));
 						logger.warn("重新请求URL:"+retryPage.getRequest().getUrl());
 					}else{
-						retryRequest.notify(retryRequest.getUuid());
+						retryRequest.notifySelf();
 						logger.error("下载次数超过"+maxPageRetryCount+":"+retryPage.getRequest().getUrl()+" 被丢弃");
 					}
 				}else if(page instanceof OkPage){
 					try {
 						List<BasicRequest> newRequests = new ArrayList<BasicRequest>();
 						List<Proccessable> objectContainer = new ArrayList<Proccessable>();
-					    pageProccess.process((OkPage) page,finalContext,newRequests,objectContainer);
+					    pageProccess.process((OkPage) page,null,newRequests,objectContainer);
 						handleResult(newRequests,objectContainer);
 						BasicRequest basicRequest = page.getRequest();
-					    basicRequest.notify(basicRequest.getUuid());
+						basicRequest.notifySelf();
 					} catch (Exception e) {
 						logger.error("离线处理异常URL:"+page.getRequest().getUrl(),e);
 					}
@@ -186,6 +186,10 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	}
 	
 	
+	protected void handleResult(List<BasicRequest> newRequests, List<Proccessable> objectContainer) {
+		
+	}
+
 	public void pushRequest(String taskName,List<BasicRequest> requests){
 		try {
 			ICrawlerMasterServer crawlerMasterServer = (ICrawlerMasterServer) Naming.lookup(Properties.masterAddress);
@@ -198,7 +202,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 
 	@Override
 	public NodeStatus getStatus() throws RemoteException {
-		return null;
+		return SystemUtil.getLocalNodeStatus("127.0.0.1");
 	}
 
 }
