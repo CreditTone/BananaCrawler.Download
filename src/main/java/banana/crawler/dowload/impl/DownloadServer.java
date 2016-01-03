@@ -52,6 +52,8 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	private static final long serialVersionUID = 1L;
 	
 	private static Logger logger = Logger.getLogger(DownloadServer.class);
+	
+	private ICrawlerMasterServer master = null;
 
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
@@ -65,9 +67,23 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	
 	private ExecutorService offlineHandleThreadPool; //离线处理线程
 	
+	private static DownloadServer instance = null;
 	
-	protected DownloadServer() throws RemoteException {
+	static{
+		try {
+			instance = new DownloadServer();
+		} catch (Exception e) {
+			logger.warn("", e);
+		}
+	}
+	
+	public static DownloadServer getInstance(){
+		return instance;
+	}
+	
+	private DownloadServer() throws RemoteException, MalformedURLException, NotBoundException {
 		super();
+		master = (ICrawlerMasterServer) Naming.lookup((String) Properties.getConfigPropertie(PropertiesNamespace.Download.MASTER_HOST));
 		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
 		offlineHandleThreadPool = Executors.newCachedThreadPool();
 	}
@@ -161,7 +177,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 				if(page instanceof RetryPage){
 					RetryPage retryPage = (RetryPage) page;
 					PageRequest retryRequest = retryPage.getRequest();
-					int maxPageRetryCount = (int) Properties.getPropertie(taskName, PropertiesNamespace.Task.MAX_PAGE_RETRY_COUNT);
+					int maxPageRetryCount = (int) Properties.getTaskPropertie(taskName, PropertiesNamespace.Task.MAX_PAGE_RETRY_COUNT);
 					if(retryRequest.getHistoryCount() < maxPageRetryCount){
 						pushRequest(taskName,Arrays.asList((BasicRequest)retryRequest));
 						logger.warn("重新请求URL:"+retryPage.getRequest().getUrl());
@@ -192,17 +208,19 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 
 	public void pushRequest(String taskName,List<BasicRequest> requests){
 		try {
-			ICrawlerMasterServer crawlerMasterServer = (ICrawlerMasterServer) Naming.lookup(Properties.masterAddress);
-			crawlerMasterServer.pushTaskRequests(taskName, requests);
+			master.pushTaskRequests(taskName, requests);
 		} catch (Exception e) {
 			logger.warn(e.getMessage());
 		}
-		
 	}
 
 	@Override
 	public NodeStatus getStatus() throws RemoteException {
 		return SystemUtil.getLocalNodeStatus("127.0.0.1");
+	}
+	
+	public ICrawlerMasterServer getMasterServer(){
+		return master;
 	}
 
 }
