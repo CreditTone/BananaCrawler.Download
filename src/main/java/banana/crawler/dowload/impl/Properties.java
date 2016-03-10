@@ -2,6 +2,8 @@ package banana.crawler.dowload.impl;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.rmi.Naming;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,9 +25,14 @@ public class Properties {
 	private static Map<String,Object> properties = new HashMap<String,Object>();
 	
 	static{
+		
 		try {
-			String body = FileUtils.readFileToString(new File("config.json"));
-			JSONObject json = JSONObject.fromObject(body);
+			URL url = Properties.class.getClassLoader().getResource("config.json");
+			InputStream in = url.openStream();
+			byte[] body = new byte[in.available()];
+			in.read(body);
+			in.close();
+			JSONObject json = JSONObject.fromObject(new String(body));
 			Set<String> keySet = json.keySet();
 			for (String key : keySet) {
 				properties.put(key, json.get(key));
@@ -33,6 +40,10 @@ public class Properties {
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+	
+	public static void main(String[] args) {
+		
 	}
 	
 	public static Object getConfigPropertie(String propertie){

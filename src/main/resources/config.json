@@ -1,4 +1,4 @@
 {
-	"masterHost":"localhost",
-	"masterPost":9090
+	"banana.download.master.host":"localhost",
+	"banana.download.master.port":1099
 }

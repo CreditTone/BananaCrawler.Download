@@ -1,7 +1,6 @@
 package banana.crawler.dowload.impl;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -28,12 +27,15 @@ import com.banana.common.PropertiesNamespace;
 import com.banana.common.download.IDownload;
 import com.banana.common.master.ICrawlerMasterServer;
 import com.banana.common.util.SystemUtil;
+import com.banana.component.DataProcessor;
 import com.banana.component.PageProcessor;
 import com.banana.component.PageScript;
+import com.banana.component.config.MongonDataProcessor;
+import com.banana.component.config.XmlConfigPageProcessor;
 import com.banana.downloader.JavaScriptDownloader;
 import com.banana.downloader.impl.DefaultFileDownloader;
 import com.banana.downloader.impl.DefaultPageDownloader;
-import com.banana.model.Proccessable;
+import com.banana.model.Processable;
 import com.banana.page.OkPage;
 import com.banana.page.Page;
 import com.banana.page.RetryPage;
@@ -57,6 +59,8 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
+	private Map<String,DataProcessor> dataProcessors = new HashMap<String,DataProcessor>();
+	
 	private URLClassLoader externalClassLoader = new URLClassLoader(new URL[]{});
 
 	private String externalPath ;
@@ -73,7 +77,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 		try {
 			instance = new DownloadServer();
 		} catch (Exception e) {
-			logger.warn("", e);
+			logger.warn("请检测master是否正常启动", e);
 		}
 	}
 	
@@ -83,7 +87,9 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	
 	private DownloadServer() throws RemoteException, MalformedURLException, NotBoundException {
 		super();
-		master = (ICrawlerMasterServer) Naming.lookup((String) Properties.getConfigPropertie(PropertiesNamespace.Download.MASTER_HOST));
+		String masterHost = (String) Properties.getConfigPropertie(PropertiesNamespace.Download.MASTER_HOST);
+		int masterPort = (int) Properties.getConfigPropertie(PropertiesNamespace.Download.MASTER_PORT);
+		master = (ICrawlerMasterServer) Naming.lookup("rmi://" + masterHost + ":" + masterPort +"/master");
 		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
 		offlineHandleThreadPool = Executors.newCachedThreadPool();
 	}
@@ -144,9 +150,12 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 		}
 		PageProcessor proccess = null;
 		try {
-			Class<? extends PageProcessor> proccessCls = (Class<? extends PageProcessor>) externalClassLoader.loadClass(proccessClsName);
-			proccess = proccessCls.newInstance();
-			if(!pageProcessors.containsKey(proccessCls)){
+			if (proccessClsName.startsWith("config://")){
+				String config = "";//从redis读取配置信息
+				proccess = XmlConfigPageProcessor.newConfigPageProcessor(config);
+			}else{
+				Class<? extends PageProcessor> proccessCls = (Class<? extends PageProcessor>) externalClassLoader.loadClass(proccessClsName);
+				proccess = proccessCls.newInstance();
 				pageProcessors.put(proccessClsName , proccess );
 			}
 		} catch (Exception e) {
@@ -161,6 +170,33 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 			pageProcessor = addPageProcessor(proccessClsName);
 		}
 		return pageProcessor;
+	}
+	
+	private synchronized DataProcessor  addDataProcessor(String proccessClsName){
+		if(dataProcessors.get(proccessClsName) != null){
+			return dataProcessors.get(proccessClsName);
+		}
+		DataProcessor proccess = null;
+		try {
+			if (proccessClsName.equals("default")){
+				proccess = new MongonDataProcessor();
+			}else{
+				Class<? extends DataProcessor> proccessCls = (Class<? extends DataProcessor>) externalClassLoader.loadClass(proccessClsName);
+				proccess = proccessCls.newInstance();
+			}
+			dataProcessors.put(proccessClsName , proccess );
+		} catch (Exception e) {
+			logger.warn(e.getMessage());
+		}
+		return proccess;
+	}
+	
+	public DataProcessor findDataProcessor(String proccessClsName) {
+		DataProcessor dataProcessor = dataProcessors.get(proccessClsName);
+		if(dataProcessor == null){
+			dataProcessor = addDataProcessor(proccessClsName);
+		}
+		return dataProcessor;
 	}
 	
 	/**
@@ -188,9 +224,9 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 				}else if(page instanceof OkPage){
 					try {
 						List<BasicRequest> newRequests = new ArrayList<BasicRequest>();
-						List<Proccessable> objectContainer = new ArrayList<Proccessable>();
+						List<Processable> objectContainer = new ArrayList<Processable>();
 					    pageProccess.process((OkPage) page,null,newRequests,objectContainer);
-						handleResult(newRequests,objectContainer);
+						handleResult(taskName,newRequests,objectContainer);
 						BasicRequest basicRequest = page.getRequest();
 						basicRequest.notifySelf();
 					} catch (Exception e) {
@@ -202,8 +238,15 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	}
 	
 	
-	protected void handleResult(List<BasicRequest> newRequests, List<Proccessable> objectContainer) {
-		
+	protected void handleResult(String taskName,List<BasicRequest> newRequests, List<Processable> objectContainer) {
+		//跟进URL加入队列
+		try {
+			master.pushTaskRequests(taskName, newRequests);
+		} catch (RemoteException e) {
+			e.printStackTrace();
+		}
+		DataProcessor dp = findDataProcessor("default");
+		dp.handleData(objectContainer);
 	}
 
 	public void pushRequest(String taskName,List<BasicRequest> requests){
