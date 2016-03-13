@@ -84,4 +84,9 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 		}
 		downloadInstance.put(taskName, new Download(taskName,thread, instance));
 	}
+
+	@Override
+	public void changeThread(String taskName, int thread) throws RemoteException {
+		
+	}
 }
