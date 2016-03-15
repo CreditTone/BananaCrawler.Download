@@ -17,6 +17,8 @@ import java.util.concurrent.Executors;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
+import com.banana.common.JOperator.OperationJedis;
+import com.banana.common.PrefixInfo;
 import com.banana.common.PropertiesNamespace;
 import com.banana.common.util.CountableThreadPool;
 import com.banana.component.DataProcessor;
@@ -33,6 +35,9 @@ import com.banana.request.BasicRequest;
 import com.banana.request.BinaryRequest;
 import com.banana.request.PageRequest;
 import com.banana.request.TransactionRequest;
+
+import redis.clients.jedis.Jedis;
+
 import com.banana.request.PageRequest.PageEncoding;
 
 public class Download implements Runnable{
@@ -59,19 +64,18 @@ public class Download implements Runnable{
 	
 	private CountableThreadPool downloadThreadPool ;
 	
+	private int fetchsize;
+	
 	public Download(String tname,int thread,DownloadServer ds){
 		taskName = tname;
 		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
 		downloadServer = ds;
 		downloadThreadPool = new CountableThreadPool(thread, Executors.newCachedThreadPool());
+		fetchsize = thread * 3 < 10? 10 :thread * 3;
 	}
 	
 	public boolean isRuning() {
 		return isRuning;
-	}
-
-	public void setRuning(boolean isRuning) {
-		this.isRuning = isRuning;
 	}
 
 	private boolean download(BasicRequest request){
@@ -82,7 +86,7 @@ public class Download implements Runnable{
 			if(pageRequest.getPageEncoding()==null){
 				pageRequest.setPageEncoding(PageEncoding.UTF8);
 			}
-			PageProcessor pageProccess = findPageProcessor(pageRequest.getProcessorClass().getName());
+			PageProcessor pageProccess = findPageProcessor(pageRequest.getProcessorClass().getName(),pageRequest.getProcessorAddress());
 			if(pageProccess == null){
 				logger.warn("Not Found PageProcessor Name:"+pageRequest.getProcessorClass().getName());
 				return false;
@@ -106,24 +110,25 @@ public class Download implements Runnable{
 		return true;
 	}
 	
-	private synchronized PageProcessor addPageProcessor(String proccessClsName){
+	private synchronized PageProcessor addPageProcessor(String proccessClsName,String arg1){
 		if(pageProcessors.get(proccessClsName) != null){
 			return pageProcessors.get(proccessClsName);
 		}
 		PageProcessor proccess = null;
 		try {
 			if (proccessClsName.equals(XmlConfigPageProcessor.class.getName())){
-				String xmlConfig = null; 
-				/*redis.exe(new OperationJedis<String>() {
+				if (arg1 != null){
+					String xmlConfig = downloadServer.getRedis().exe(new OperationJedis<String>() {
 
-					@Override
-					public String operation(Jedis jedis) throws Exception {
-						jedis.get(key)
-						return null;
-					}
-				});*/
-				String processorName = null;
-				proccess = XmlConfigPageProcessor.newConfigPageProcessor(xmlConfig,processorName);
+						@Override
+						public String operation(Jedis jedis) throws Exception {
+							String taskKey = PrefixInfo.TASK_PREFIX + taskName + PrefixInfo.TASK_CONFIG;
+							return jedis.get(taskKey);
+						}
+					});
+					String processorName = arg1;
+					proccess = XmlConfigPageProcessor.newConfigPageProcessor(xmlConfig,processorName);
+				}
 			}else{
 				Class<? extends PageProcessor> proccessCls = (Class<? extends PageProcessor>) externalClassLoader.loadClass(proccessClsName);
 				proccess = proccessCls.newInstance();
@@ -135,10 +140,10 @@ public class Download implements Runnable{
 		return proccess;
 	}
 	
-	public PageProcessor findPageProcessor(String proccessClsName) {
+	public PageProcessor findPageProcessor(String proccessClsName,String arg1) {
 		PageProcessor pageProcessor = pageProcessors.get(proccessClsName);
 		if(pageProcessor == null){
-			pageProcessor = addPageProcessor(proccessClsName);
+			pageProcessor = addPageProcessor(proccessClsName,arg1);
 		}
 		return pageProcessor;
 	}
@@ -234,11 +239,53 @@ public class Download implements Runnable{
 		}
 		return true;
 	}
+	
+	public final List<BasicRequest> pollRequests() throws InterruptedException, RemoteException{
+		while (true) {
+			if(downloadThreadPool.getIdleThreadCount() == 0){
+				Thread.sleep(100);
+				continue;//等待有线程可以工作
+			}
+			return downloadServer.getMasterServer().pollTaskRequests(taskName, fetchsize);
+		}
+	}
+	
+	private final void asyncInvokeDownload(final BasicRequest request){
+		downloadThreadPool.execute(new Runnable() {
+			@Override
+			public void run() {
+				download(request);
+			}
+		});
+	}
 
 	@Override
 	public void run() {
+		isRuning = true;
+		defaultPageDownloader.open();//打开下载器
+		List<BasicRequest> requests = null;
 		while(true){
-			
+			try{
+				requests = pollRequests();
+				if (isRuning && requests.isEmpty()){
+					Thread.sleep(1000);
+					continue;
+				}
+				for (BasicRequest request : requests) {
+					asyncInvokeDownload(request);
+				}
+			}catch(Exception e){
+				logger.error("轮询队列出错",e);
+				break;
+			}
+			if (!isRuning){
+				//销毁
+				break;
+			}
 		}
+	}
+	
+	public void stop(){
+		isRuning = false;
 	}
 }

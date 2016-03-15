@@ -64,7 +64,6 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 		}
 		Thread fetchLinkThread = new Thread(d);
 		fetchLinkThread.start();
-		d.setRuning(true);
 		return true;
 	}
 
@@ -76,13 +75,17 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	public ICrawlerMasterServer getMasterServer(){
 		return master;
 	}
+	
+	public JOperator getRedis(){
+		return redis;
+	}
 
 	@Override
 	public void newDownload(String taskName, int thread) throws RemoteException {
 		if (downloadInstance.containsKey(taskName)){
 			throw new RemoteException("这个任务已经存在:"+taskName);
 		}
-		downloadInstance.put(taskName, new Download(taskName,thread, instance));
+		downloadInstance.put(taskName, new Download(taskName,thread, this));
 	}
 
 	@Override
