@@ -31,7 +31,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 
 	private JOperator redis;
 	
-	private Map<String,Download> downloadInstance = new HashMap<String,Download>();
+	private Map<String,DownloadTracker> downloadInstance = new HashMap<String,DownloadTracker>();
 	
 	private static DownloadServer instance = null;
 	
@@ -56,7 +56,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	}
 	
 	public boolean startDownload(String taskName) throws RemoteException{	
-		Download d = downloadInstance.get(taskName);
+		DownloadTracker d = downloadInstance.get(taskName);
 		if (d == null){
 			throw new RemoteException("Can't find the downloader");
 		}else if (d.isRuning()){
@@ -85,7 +85,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 		if (downloadInstance.containsKey(taskName)){
 			throw new RemoteException("这个任务已经存在:"+taskName);
 		}
-		downloadInstance.put(taskName, new Download(taskName,thread, this));
+		downloadInstance.put(taskName, new DownloadTracker(taskName,thread, this));
 	}
 
 	@Override

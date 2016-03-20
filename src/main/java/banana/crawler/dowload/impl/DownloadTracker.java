@@ -40,9 +40,9 @@ import redis.clients.jedis.Jedis;
 
 import com.banana.request.PageRequest.PageEncoding;
 
-public class Download implements Runnable{
+public class DownloadTracker implements Runnable{
 	
-	private static Logger logger = Logger.getLogger(Download.class);
+	private static Logger logger = Logger.getLogger(DownloadTracker.class);
 	
 	private final String taskName;
 	
@@ -66,7 +66,7 @@ public class Download implements Runnable{
 	
 	private int fetchsize;
 	
-	public Download(String tname,int thread,DownloadServer ds){
+	public DownloadTracker(String tname,int thread,DownloadServer ds){
 		taskName = tname;
 		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
 		downloadServer = ds;
