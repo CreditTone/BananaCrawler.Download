@@ -1,6 +1,7 @@
 package banana.crawler.dowload.impl;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -17,7 +18,7 @@ import java.util.concurrent.Executors;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
-import com.banana.common.JOperator.OperationJedis;
+import com.banana.common.JedisOperator.Command;
 import com.banana.common.PrefixInfo;
 import com.banana.common.PropertiesNamespace;
 import com.banana.common.util.CountableThreadPool;
@@ -118,7 +119,7 @@ public class DownloadTracker implements Runnable{
 		try {
 			if (proccessClsName.equals(XmlConfigPageProcessor.class.getName())){
 				if (arg1 != null){
-					String xmlConfig = downloadServer.getRedis().exe(new OperationJedis<String>() {
+					String xmlConfig = downloadServer.getRedis().exe(new Command<String>() {
 
 						@Override
 						public String operation(Jedis jedis) throws Exception {
@@ -287,5 +288,22 @@ public class DownloadTracker implements Runnable{
 	
 	public void stop(){
 		isRuning = false;
+		downloadThreadPool.close();
+		try{
+			externalClassLoader.close();
+		}catch(Exception e){
+			logger.warn("",e);
+		}
+		try {
+			defaultPageDownloader.close();
+		} catch (IOException e) {
+			logger.warn("",e);
+		}
+		try {
+			defaultFileDownloader.close();
+		} catch (IOException e) {
+			logger.warn("",e);
+		}
+		
 	}
 }

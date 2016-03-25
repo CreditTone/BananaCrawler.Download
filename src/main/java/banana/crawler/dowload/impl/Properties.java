@@ -1,18 +1,14 @@
 package banana.crawler.dowload.impl;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.rmi.Naming;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
-import com.banana.common.master.ICrawlerMasterServer;
 
 import net.sf.json.JSONObject;
 
@@ -25,7 +21,6 @@ public class Properties {
 	private static Map<String,Object> properties = new HashMap<String,Object>();
 	
 	static{
-		
 		try {
 			URL url = Properties.class.getClassLoader().getResource("config.json");
 			InputStream in = url.openStream();

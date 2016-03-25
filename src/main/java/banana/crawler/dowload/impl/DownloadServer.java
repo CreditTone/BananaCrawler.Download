@@ -10,7 +10,7 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
-import com.banana.common.JOperator;
+import com.banana.common.JedisOperator;
 import com.banana.common.NodeStatus;
 import com.banana.common.PropertiesNamespace;
 import com.banana.common.download.IDownload;
@@ -29,33 +29,35 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	
 	private ICrawlerMasterServer master = null;
 
-	private JOperator redis;
+	private JedisOperator redis;
 	
 	private Map<String,DownloadTracker> downloadInstance = new HashMap<String,DownloadTracker>();
 	
 	private static DownloadServer instance = null;
 	
-	static{
-		try {
-			instance = new DownloadServer();
-		} catch (Exception e) {
-			logger.warn("请检测master是否正常启动", e);
+	public static DownloadServer initInstance(String masterHost){
+		if (instance == null){
+			try {
+				instance = new DownloadServer(masterHost);
+			} catch (Exception e) {
+				logger.warn("请检测master是否正常启动", e);
+				return null;
+			}
 		}
+		return instance;
 	}
 	
 	public static DownloadServer getInstance(){
 		return instance;
 	}
 	
-	private DownloadServer() throws RemoteException, MalformedURLException, NotBoundException {
+	private DownloadServer(String masterHost) throws RemoteException, MalformedURLException, NotBoundException {
 		super();
-		String masterHost = (String) Properties.getConfigPropertie(PropertiesNamespace.Download.MASTER_HOST);
-		int masterPort = (int) Properties.getConfigPropertie(PropertiesNamespace.Download.MASTER_PORT);
-		master = (ICrawlerMasterServer) Naming.lookup("rmi://" + masterHost + ":" + masterPort +"/master");
-		redis = JOperator.newInstance(master.getMasterPropertie(PropertiesNamespace.Master.REDIS_HOST).toString(), (Integer)master.getMasterPropertie(PropertiesNamespace.Master.REDIS_PORT));
+		master = (ICrawlerMasterServer) Naming.lookup("rmi://" + masterHost + ":1099"+"/master");
+		redis = JedisOperator.newInstance(master.getMasterPropertie(PropertiesNamespace.Master.REDIS_HOST).toString(), (Integer)master.getMasterPropertie(PropertiesNamespace.Master.REDIS_PORT));
 	}
 	
-	public boolean startDownload(String taskName) throws RemoteException{	
+	public boolean startDownloadTracker(String taskName) throws RemoteException{	
 		DownloadTracker d = downloadInstance.get(taskName);
 		if (d == null){
 			throw new RemoteException("Can't find the downloader");
@@ -76,20 +78,24 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 		return master;
 	}
 	
-	public JOperator getRedis(){
+	public JedisOperator getRedis(){
 		return redis;
 	}
 
 	@Override
-	public void newDownload(String taskName, int thread) throws RemoteException {
+	public void newDownloadTracker(String taskName, int thread) throws RemoteException {
 		if (downloadInstance.containsKey(taskName)){
 			throw new RemoteException("这个任务已经存在:"+taskName);
 		}
 		downloadInstance.put(taskName, new DownloadTracker(taskName,thread, this));
 	}
-
+	
 	@Override
-	public void changeThread(String taskName, int thread) throws RemoteException {
-		
+	public void stopDownloadTracker(String taskName) throws RemoteException {
+		DownloadTracker d = downloadInstance.get(taskName);
+		if (d == null){
+			throw new RemoteException("Can't find the downloader");
+		}
+		d.stop();
 	}
 }
