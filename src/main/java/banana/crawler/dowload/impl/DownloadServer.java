@@ -70,7 +70,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	}
 
 	@Override
-	public NodeStatus getStatus() throws RemoteException {
+	public NodeStatus healthCheck() throws RemoteException {
 		return SystemUtil.getLocalNodeStatus();
 	}
 	
@@ -88,6 +88,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 			throw new RemoteException("这个任务已经存在:"+taskName);
 		}
 		downloadInstance.put(taskName, new DownloadTracker(taskName,thread, this));
+		logger.info("Create a DownloadTracker under the task " + taskName);
 	}
 	
 	@Override

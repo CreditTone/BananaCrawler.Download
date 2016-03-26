@@ -37,8 +37,10 @@ public class StartDownload {
 		DownloadServer downloadServer = DownloadServer.initInstance(master);
 		if (downloadServer != null){
 			LocateRegistry.createRegistry(1098);
-			Naming.rebind("rmi://0.0.0.0:1098/downloader", downloadServer);
+			Naming.rebind("rmi://localhost:1098/downloader", downloadServer);
+			downloadServer.getMasterServer().registerDownloadNode();
 		}
+		
 	}
 
 }

@@ -262,6 +262,9 @@ public class DownloadTracker implements Runnable{
 
 	@Override
 	public void run() {
+		logger.info("DownloadTracker Starting ");
+		logger.info("DownloadTracker TaskName = " + taskName);
+		logger.info("DownloadTracker thread = " + downloadThreadPool.getThreadNum());
 		isRuning = true;
 		defaultPageDownloader.open();//打开下载器
 		List<BasicRequest> requests = null;
@@ -269,6 +272,7 @@ public class DownloadTracker implements Runnable{
 			try{
 				requests = pollRequests();
 				if (isRuning && requests.isEmpty()){
+					logger.info("Task "+ taskName +" queue is empty");
 					Thread.sleep(1000);
 					continue;
 				}
