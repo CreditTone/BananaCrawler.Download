@@ -7,8 +7,8 @@
 	<dependencies>
 		<dependency>
 			<groupId>banana</groupId>
-			<artifactId>banana.crawler</artifactId>
-			<version>1.3</version>
+			<artifactId>banana.crawler.core</artifactId>
+			<version>0.0.1</version>
 		</dependency>
 		<dependency>
 			<groupId>commons-cli</groupId>

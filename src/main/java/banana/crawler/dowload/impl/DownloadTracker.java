@@ -18,30 +18,22 @@ import java.util.concurrent.Executors;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
-import com.banana.common.JedisOperator.Command;
-import com.banana.common.PrefixInfo;
-import com.banana.common.PropertiesNamespace;
-import com.banana.common.util.CountableThreadPool;
-import com.banana.component.DataProcessor;
-import com.banana.component.PageProcessor;
-import com.banana.component.config.MongonDataProcessor;
-import com.banana.component.config.XmlConfigPageProcessor;
-import com.banana.downloader.impl.DefaultFileDownloader;
-import com.banana.downloader.impl.DefaultPageDownloader;
-import com.banana.model.Processable;
-import com.banana.page.OkPage;
-import com.banana.page.Page;
-import com.banana.page.RetryPage;
-import com.banana.request.BasicRequest;
-import com.banana.request.BinaryRequest;
-import com.banana.request.PageRequest;
-import com.banana.request.TransactionRequest;
-
+import banana.core.download.impl.DefaultFileDownloader;
+import banana.core.download.impl.DefaultPageDownloader;
+import banana.core.exception.CrawlerMasterException;
+import banana.core.modle.CrawlData;
+import banana.core.processor.DataProcessor;
+import banana.core.processor.PageProcessor;
+import banana.core.request.BasicRequest;
+import banana.core.request.BinaryRequest;
+import banana.core.request.PageRequest;
+import banana.core.request.PageRequest.PageEncoding;
+import banana.core.request.TransactionRequest;
+import banana.core.response.Page;
+import banana.core.util.CountableThreadPool;
 import redis.clients.jedis.Jedis;
 
-import com.banana.request.PageRequest.PageEncoding;
-
-public class DownloadTracker implements Runnable{
+public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
 	private static Logger logger = Logger.getLogger(DownloadTracker.class);
 	
@@ -49,8 +41,6 @@ public class DownloadTracker implements Runnable{
 	
 	private boolean isRuning = false;
 	
-	private DownloadServer downloadServer;
-
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
 	private Map<String,DataProcessor> dataProcessors = new HashMap<String,DataProcessor>();
@@ -67,10 +57,9 @@ public class DownloadTracker implements Runnable{
 	
 	private int fetchsize;
 	
-	public DownloadTracker(String tname,int thread,DownloadServer ds){
+	public DownloadTracker(String tname,int thread){
 		taskName = tname;
 		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
-		downloadServer = ds;
 		downloadThreadPool = new CountableThreadPool(thread, Executors.newCachedThreadPool());
 		fetchsize = thread * 3 < 10? 10 :thread * 3;
 	}
@@ -93,7 +82,7 @@ public class DownloadTracker implements Runnable{
 				return false;
 			}
 			Page page = defaultPageDownloader.download(pageRequest,taskName);
-			logger.info("抓取:"+pageRequest.getUrl()+"\tStatus:"+page.getStatus()+"\tCode:"+page.getStatusCode());
+			logger.info("抓取:"+pageRequest.getUrl()+"\tStatusCode:"+page.getStatus());
 			offlineHandle(pageProccess, page);
 			break;
 		case TRANSACTION_REQUEST:
@@ -116,28 +105,28 @@ public class DownloadTracker implements Runnable{
 			return pageProcessors.get(proccessClsName);
 		}
 		PageProcessor proccess = null;
-		try {
-			if (proccessClsName.equals(XmlConfigPageProcessor.class.getName())){
-				if (arg1 != null){
-					String xmlConfig = downloadServer.getRedis().exe(new Command<String>() {
-
-						@Override
-						public String operation(Jedis jedis) throws Exception {
-							String taskKey = PrefixInfo.TASK_PREFIX + taskName + PrefixInfo.TASK_CONFIG;
-							return jedis.get(taskKey);
-						}
-					});
-					String processorName = arg1;
-					proccess = XmlConfigPageProcessor.newConfigPageProcessor(xmlConfig,processorName);
-				}
-			}else{
-				Class<? extends PageProcessor> proccessCls = (Class<? extends PageProcessor>) externalClassLoader.loadClass(proccessClsName);
-				proccess = proccessCls.newInstance();
-				pageProcessors.put(proccessClsName , proccess );
-			}
-		} catch (Exception e) {
-			logger.warn(e.getMessage());
-		}
+//		try {
+//			if (proccessClsName.equals(XmlConfigPageProcessor.class.getName())){
+//				if (arg1 != null){
+//					String xmlConfig = downloadServer.getRedis().exe(new Command<String>() {
+//
+//						@Override
+//						public String operation(Jedis jedis) throws Exception {
+//							String taskKey = PrefixInfo.TASK_PREFIX + taskName + PrefixInfo.TASK_CONFIG;
+//							return jedis.get(taskKey);
+//						}
+//					});
+//					String processorName = arg1;
+//					proccess = XmlConfigPageProcessor.newConfigPageProcessor(xmlConfig,processorName);
+//				}
+//			}else{
+//				Class<? extends PageProcessor> proccessCls = (Class<? extends PageProcessor>) externalClassLoader.loadClass(proccessClsName);
+//				proccess = proccessCls.newInstance();
+//				pageProcessors.put(proccessClsName , proccess );
+//			}
+//		} catch (Exception e) {
+//			logger.warn(e.getMessage());
+//		}
 		return proccess;
 	}
 	
@@ -156,7 +145,7 @@ public class DownloadTracker implements Runnable{
 		DataProcessor proccess = null;
 		try {
 			if (proccessClsName.equals("default")){
-				proccess = new MongonDataProcessor();
+				//proccess = new MongonDataProcessor();
 			}else{
 				Class<? extends DataProcessor> proccessCls = (Class<? extends DataProcessor>) externalClassLoader.loadClass(proccessClsName);
 				proccess = proccessCls.newInstance();
@@ -183,37 +172,37 @@ public class DownloadTracker implements Runnable{
 	 * @return
 	 */
 	private final void offlineHandle(final PageProcessor pageProccess ,final Page page){
-		if(page instanceof RetryPage){
-			RetryPage retryPage = (RetryPage) page;
-			PageRequest retryRequest = retryPage.getRequest();
-			int maxPageRetryCount = (int) Properties.getTaskPropertie(taskName, PropertiesNamespace.Task.MAX_PAGE_RETRY_COUNT);
-			if(retryRequest.getHistoryCount() < maxPageRetryCount){
-				handleResult(Arrays.asList((BasicRequest)retryRequest), null);
-				logger.warn("重新请求URL:"+retryPage.getRequest().getUrl());
-			}else{
-				retryRequest.notifySelf();
-				logger.error("下载次数超过"+maxPageRetryCount+":"+retryPage.getRequest().getUrl()+" 被丢弃");
-			}
-		}else if(page instanceof OkPage){
+		int ret = page.getStatus() / 100;
+		PageRequest pr = (PageRequest) page.getRequest();
+		if (ret == 2){
 			try {
 				List<BasicRequest> newRequests = new ArrayList<BasicRequest>();
-				List<Processable> objectContainer = new ArrayList<Processable>();
-			    pageProccess.process((OkPage) page,null,newRequests,objectContainer);
+				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
+			    pageProccess.process(page,null,newRequests,objectContainer);
 				handleResult(newRequests,objectContainer);
 				BasicRequest basicRequest = page.getRequest();
-				basicRequest.notifySelf();
+			    basicRequest.notify(basicRequest.getUuid());
 			} catch (Exception e) {
-				logger.error("离线处理异常URL:"+page.getRequest().getUrl(),e);
+				e.printStackTrace();
+				logger.error("离线处理异常URL:"+pr.getUrl(),e);
+			}
+		}else{
+			if(page.getRequest().getHistoryCount() < 3){
+				handleResult(Arrays.asList(page.getRequest()), null);
+				logger.warn("重新请求URL:"+ pr.getUrl());
+			}else{
+				pr.notify(pr.getUuid());
+				logger.error("下载次数超过" + 3 + ":"+pr.getUrl()+" 被丢弃");
 			}
 		}
 	}
 	
 	
-	protected void handleResult(List<BasicRequest> newRequests, List<Processable> objectContainer) {
+	protected void handleResult(List<BasicRequest> newRequests, List<CrawlData> objectContainer) {
 		//跟进URL加入队列
 		try {
-			downloadServer.getMasterServer().pushTaskRequests(taskName, newRequests);
-		} catch (RemoteException e) {
+			DownloadServer.getInstance().getMasterServer().pushTaskRequests(taskName, newRequests);
+		} catch (CrawlerMasterException e) {
 			e.printStackTrace();
 		}
 		if (objectContainer != null){
@@ -241,13 +230,13 @@ public class DownloadTracker implements Runnable{
 		return true;
 	}
 	
-	public final List<BasicRequest> pollRequests() throws InterruptedException, RemoteException{
+	public final List<BasicRequest> pollRequests() throws CrawlerMasterException, InterruptedException {
 		while (true) {
 			if(downloadThreadPool.getIdleThreadCount() == 0){
 				Thread.sleep(100);
 				continue;//等待有线程可以工作
 			}
-			return downloadServer.getMasterServer().pollTaskRequests(taskName, fetchsize);
+			return DownloadServer.getInstance().getMasterServer().pollTaskRequests(taskName, fetchsize);
 		}
 	}
 	
@@ -290,6 +279,7 @@ public class DownloadTracker implements Runnable{
 		}
 	}
 	
+	@Override
 	public void stop(){
 		isRuning = false;
 		downloadThreadPool.close();
@@ -308,6 +298,16 @@ public class DownloadTracker implements Runnable{
 		} catch (IOException e) {
 			logger.warn("",e);
 		}
-		
+	}
+	
+	@Override
+	public Page sendRequest(PageRequest request) {
+		Page page = defaultPageDownloader.download(request,taskName);
+		return page;
+	}
+
+	@Override
+	public void setFetchSize(int fetchsize) {
+		this.fetchsize = fetchsize;
 	}
 }

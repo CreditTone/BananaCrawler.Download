@@ -1,25 +1,26 @@
 package banana.crawler.dowload.impl;
 
-import java.net.MalformedURLException;
-import java.rmi.Naming;
-import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
-import java.rmi.server.UnicastRemoteObject;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.ipc.ProtocolSignature;
+import org.apache.hadoop.ipc.RPC;
 import org.apache.log4j.Logger;
 
-import com.banana.common.JedisOperator;
-import com.banana.common.NodeStatus;
-import com.banana.common.PropertiesNamespace;
-import com.banana.common.download.IDownload;
-import com.banana.common.master.ICrawlerMasterServer;
-import com.banana.common.util.SystemUtil;
-import com.banana.request.BasicRequest;
+import banana.core.JedisOperator;
+import banana.core.NodeStatus;
+import banana.core.exception.DownloadException;
+import banana.core.protocol.CrawlerMasterProtocol;
+import banana.core.protocol.DownloadProtocol;
+import banana.core.util.SystemUtil;
 
 
-public final class DownloadServer extends UnicastRemoteObject implements IDownload{
+public final class DownloadServer implements DownloadProtocol{
 	/**
 	 * 
 	 */
@@ -27,7 +28,7 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	
 	private static Logger logger = Logger.getLogger(DownloadServer.class);
 	
-	private ICrawlerMasterServer master = null;
+	private CrawlerMasterProtocol master = null;
 
 	private JedisOperator redis;
 	
@@ -40,29 +41,36 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 			try {
 				instance = new DownloadServer(masterHost);
 			} catch (Exception e) {
-				logger.warn("请检测master是否正常启动", e);
+				logger.warn("请确认master已经启动", e);
 				return null;
 			}
 		}
 		return instance;
 	}
 	
-	public static DownloadServer getInstance(){
+	public static final DownloadServer getInstance(){
 		return instance;
 	}
 	
-	private DownloadServer(String masterHost) throws RemoteException, MalformedURLException, NotBoundException {
-		super();
-		master = (ICrawlerMasterServer) Naming.lookup("rmi://" + masterHost + ":1099"+"/master");
-		redis = JedisOperator.newInstance(master.getMasterPropertie(PropertiesNamespace.Master.REDIS_HOST).toString(), (Integer)master.getMasterPropertie(PropertiesNamespace.Master.REDIS_PORT));
+	private DownloadServer(String masterHost){
+		try {
+			int port = 8787;
+			if (masterHost.contains(":")){
+				port = Integer.parseInt(masterHost.split(":")[1]);
+			}
+			master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(masterHost,port),new Configuration());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
-	public boolean startDownloadTracker(String taskName) throws RemoteException{	
-		DownloadTracker d = downloadInstance.get(taskName);
+	@Override
+	public boolean startDownloadTracker(String trackerId) throws DownloadException{
+		DownloadTracker d = downloadInstance.get(trackerId);
 		if (d == null){
-			throw new RemoteException("Can't find the downloader");
+			throw new DownloadException("Can't find the downloader");
 		}else if (d.isRuning()){
-			throw new RemoteException("Downloader is already running");
+			throw new DownloadException("Downloader is already running");
 		}
 		Thread fetchLinkThread = new Thread(d);
 		fetchLinkThread.start();
@@ -70,11 +78,11 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	}
 
 	@Override
-	public NodeStatus healthCheck() throws RemoteException {
+	public NodeStatus healthCheck(){
 		return SystemUtil.getLocalNodeStatus();
 	}
 	
-	public ICrawlerMasterServer getMasterServer(){
+	public CrawlerMasterProtocol getMasterServer(){
 		return master;
 	}
 	
@@ -83,20 +91,35 @@ public final class DownloadServer extends UnicastRemoteObject implements IDownlo
 	}
 
 	@Override
-	public void newDownloadTracker(String taskName, int thread) throws RemoteException {
-		if (downloadInstance.containsKey(taskName)){
-			throw new RemoteException("这个任务已经存在:"+taskName);
+	public String newDownloadTracker(String taskName, int thread) throws DownloadException{
+		for (String key : downloadInstance.keySet()) {
+			if (key.startsWith(taskName)){
+				throw new DownloadException("TaskTracker is already running:"+taskName);
+			}
 		}
-		downloadInstance.put(taskName, new DownloadTracker(taskName,thread, this));
+		String trackerId = taskName + "_" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
+		downloadInstance.put(trackerId, new DownloadTracker(taskName,thread));
 		logger.info("Create a DownloadTracker under the task " + taskName);
+		return trackerId;
 	}
 	
 	@Override
-	public void stopDownloadTracker(String taskName) throws RemoteException {
+	public void stopDownloadTracker(String taskName) throws DownloadException {
 		DownloadTracker d = downloadInstance.get(taskName);
 		if (d == null){
-			throw new RemoteException("Can't find the downloader");
+			throw new DownloadException("Can't find the downloader");
 		}
 		d.stop();
+	}
+
+	@Override
+	public long getProtocolVersion(String protocol, long clientVersion) throws IOException {
+		return DownloadProtocol.versionID;
+	}
+
+	@Override
+	public ProtocolSignature getProtocolSignature(String protocol, long clientVersion, int clientMethodsHash)
+			throws IOException {
+		return new ProtocolSignature(DownloadProtocol.versionID,null);
 	}
 }
