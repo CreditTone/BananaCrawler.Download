@@ -31,16 +31,21 @@ public class StartDownload {
 		CommandLineParser parser = new BasicParser( );  
 		Options options = new Options();
 		options.addOption("h", "help", false, "Print this usage information");  
-		options.addOption("m", "master", true, "Set the mater host");  
+		options.addOption("m", "master", true, "Set the mater host");
+		options.addOption("e", "extractor", true, "Set the extractor host");
 		CommandLine commandLine = parser.parse( options, args );
 		HelpFormatter formatter = new HelpFormatter();
-		if( commandLine.hasOption('h') ) {  
+		if(commandLine.hasOption('h') ) {  
 		    formatter.printHelp("Downloader", options);
 		    System.exit(0);  
 		}
 		String master = "localhost";
-		if( commandLine.hasOption('m')) {
+		if(commandLine.hasOption('m')) {
 			master = commandLine.getOptionValue("m");
+		}
+		String extractor = "localhost";
+		if(commandLine.hasOption('e')) {
+			extractor = commandLine.getOptionValue("e");
 		}
 		DownloadServer downloadServer = DownloadServer.initInstance(master);
 		if (downloadServer != null){

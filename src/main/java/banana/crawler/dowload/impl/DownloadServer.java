@@ -2,8 +2,6 @@ package banana.crawler.dowload.impl;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -65,19 +63,6 @@ public final class DownloadServer implements DownloadProtocol{
 	}
 	
 	@Override
-	public boolean startDownloadTracker(String trackerId) throws DownloadException{
-		DownloadTracker d = downloadInstance.get(trackerId);
-		if (d == null){
-			throw new DownloadException("Can't find the downloader");
-		}else if (d.isRuning()){
-			throw new DownloadException("Downloader is already running");
-		}
-		Thread fetchLinkThread = new Thread(d);
-		fetchLinkThread.start();
-		return true;
-	}
-
-	@Override
 	public NodeStatus healthCheck(){
 		return SystemUtil.getLocalNodeStatus();
 	}
@@ -89,18 +74,27 @@ public final class DownloadServer implements DownloadProtocol{
 	public JedisOperator getRedis(){
 		return redis;
 	}
-
+	
 	@Override
-	public String newDownloadTracker(String taskName, int thread) throws DownloadException{
-		for (String key : downloadInstance.keySet()) {
-			if (key.startsWith(taskName)){
-				throw new DownloadException("TaskTracker is already running:"+taskName);
-			}
+	public boolean startDownloadTracker(String taskId,int thread) throws DownloadException{
+		newDownloadTracker(taskId, thread);
+		DownloadTracker d = downloadInstance.get(taskId);
+		if (d == null){
+			throw new DownloadException("Can't find the downloader");
+		}else if (d.isRuning()){
+			throw new DownloadException("Downloader is already running");
 		}
-		String trackerId = taskName + "_" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
-		downloadInstance.put(trackerId, new DownloadTracker(taskName,thread));
-		logger.info("Create a DownloadTracker under the task " + taskName);
-		return trackerId;
+		Thread fetchLinkThread = new Thread(d);
+		fetchLinkThread.start();
+		return true;
+	}
+
+	private void newDownloadTracker(String taskId, int thread) throws DownloadException{
+		if (downloadInstance.keySet().contains(taskId)){
+			throw new DownloadException("TaskTracker is already existed");
+		}
+		downloadInstance.put(taskId, new DownloadTracker(taskId,thread));
+		logger.info("Create a DownloadTracker under the task " + taskId);
 	}
 	
 	@Override

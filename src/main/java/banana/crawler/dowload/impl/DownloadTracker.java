@@ -24,6 +24,8 @@ import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
 import banana.core.processor.DataProcessor;
 import banana.core.processor.PageProcessor;
+import banana.core.protocol.Task;
+import banana.core.protocol.processor.JSONConfigPageProcessor;
 import banana.core.request.BasicRequest;
 import banana.core.request.BinaryRequest;
 import banana.core.request.PageRequest;
@@ -37,7 +39,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private static Logger logger = Logger.getLogger(DownloadTracker.class);
 	
-	private final String taskName;
+	private final String taskId;
 	
 	private boolean isRuning = false;
 	
@@ -57,8 +59,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private int fetchsize;
 	
-	public DownloadTracker(String tname,int thread){
-		taskName = tname;
+	public DownloadTracker(String tId,int thread){
+		taskId = tId;
 		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
 		downloadThreadPool = new CountableThreadPool(thread, Executors.newCachedThreadPool());
 		fetchsize = thread * 3 < 10? 10 :thread * 3;
@@ -76,14 +78,14 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			if(pageRequest.getPageEncoding()==null){
 				pageRequest.setPageEncoding(PageEncoding.UTF8);
 			}
-			PageProcessor pageProccess = findPageProcessor(pageRequest.getProcessorClass().getName(),pageRequest.getProcessorAddress());
-			if(pageProccess == null){
-				logger.warn("Not Found PageProcessor Name:"+pageRequest.getProcessorClass().getName());
+			PageProcessor pageProcessor = findPageProcessor(pageRequest.getProcessor());
+			if(pageProcessor == null){
+				logger.warn("Not Found PageProcessor Name:"+pageRequest.getProcessor());
 				return false;
 			}
-			Page page = defaultPageDownloader.download(pageRequest,taskName);
+			Page page = defaultPageDownloader.download(pageRequest);
 			logger.info("抓取:"+pageRequest.getUrl()+"\tStatusCode:"+page.getStatus());
-			offlineHandle(pageProccess, page);
+			offlineHandle(pageProcessor, page);
 			break;
 		case TRANSACTION_REQUEST:
 			TransactionRequest transactionRequest = (TransactionRequest) request;
@@ -100,40 +102,25 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		return true;
 	}
 	
-	private synchronized PageProcessor addPageProcessor(String proccessClsName,String arg1){
-		if(pageProcessors.get(proccessClsName) != null){
-			return pageProcessors.get(proccessClsName);
+	private synchronized PageProcessor addPageProcessor(String processor) {
+		if(pageProcessors.get(processor) != null){
+			return pageProcessors.get(processor);
 		}
-		PageProcessor proccess = null;
-//		try {
-//			if (proccessClsName.equals(XmlConfigPageProcessor.class.getName())){
-//				if (arg1 != null){
-//					String xmlConfig = downloadServer.getRedis().exe(new Command<String>() {
-//
-//						@Override
-//						public String operation(Jedis jedis) throws Exception {
-//							String taskKey = PrefixInfo.TASK_PREFIX + taskName + PrefixInfo.TASK_CONFIG;
-//							return jedis.get(taskKey);
-//						}
-//					});
-//					String processorName = arg1;
-//					proccess = XmlConfigPageProcessor.newConfigPageProcessor(xmlConfig,processorName);
-//				}
-//			}else{
-//				Class<? extends PageProcessor> proccessCls = (Class<? extends PageProcessor>) externalClassLoader.loadClass(proccessClsName);
-//				proccess = proccessCls.newInstance();
-//				pageProcessors.put(proccessClsName , proccess );
-//			}
-//		} catch (Exception e) {
-//			logger.warn(e.getMessage());
-//		}
-		return proccess;
+		PageProcessor processorInstance = null;
+		Task config = (Task) DownloadServer.getInstance().getMasterServer().getTaskPropertie(taskId, null);
+		for (Task.Processor p : config.processors) {
+			if (processor.equals(p.getIndex())){
+				processorInstance = new JSONConfigPageProcessor(p);
+				break;
+			}
+		}
+		return processorInstance;
 	}
 	
-	public PageProcessor findPageProcessor(String proccessClsName,String arg1) {
-		PageProcessor pageProcessor = pageProcessors.get(proccessClsName);
+	public PageProcessor findPageProcessor(String processor) {
+		PageProcessor pageProcessor = pageProcessors.get(processor);
 		if(pageProcessor == null){
-			pageProcessor = addPageProcessor(proccessClsName,arg1);
+			pageProcessor = addPageProcessor(processor);
 		}
 		return pageProcessor;
 	}
@@ -201,7 +188,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	protected void handleResult(List<BasicRequest> newRequests, List<CrawlData> objectContainer) {
 		//跟进URL加入队列
 		try {
-			DownloadServer.getInstance().getMasterServer().pushTaskRequests(taskName, newRequests);
+			DownloadServer.getInstance().getMasterServer().pushTaskRequests(taskId, newRequests);
 		} catch (CrawlerMasterException e) {
 			e.printStackTrace();
 		}
@@ -236,7 +223,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				Thread.sleep(100);
 				continue;//等待有线程可以工作
 			}
-			return DownloadServer.getInstance().getMasterServer().pollTaskRequests(taskName, fetchsize);
+			return DownloadServer.getInstance().getMasterServer().pollTaskRequests(taskId, fetchsize);
 		}
 	}
 	
@@ -252,7 +239,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	@Override
 	public void run() {
 		logger.info("DownloadTracker Starting ");
-		logger.info("DownloadTracker TaskName = " + taskName);
+		logger.info("DownloadTracker TaskId = " + taskId);
 		logger.info("DownloadTracker thread = " + downloadThreadPool.getThreadNum());
 		isRuning = true;
 		defaultPageDownloader.open();//打开下载器
@@ -261,7 +248,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			try{
 				requests = pollRequests();
 				if (isRuning && requests.isEmpty()){
-					logger.info("Task "+ taskName +" queue is empty");
+					logger.info("Task "+ taskId +" queue is empty");
 					Thread.sleep(1000);
 					continue;
 				}
@@ -302,7 +289,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	@Override
 	public Page sendRequest(PageRequest request) {
-		Page page = defaultPageDownloader.download(request,taskName);
+		Page page = defaultPageDownloader.download(request);
 		return page;
 	}
 
