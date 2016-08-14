@@ -1,28 +1,20 @@
 package banana.crawler.dowload.impl;
 
-import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
 import banana.core.download.impl.DefaultFileDownloader;
 import banana.core.download.impl.DefaultPageDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
-import banana.core.processor.DataProcessor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task;
 import banana.core.protocol.processor.JSONConfigPageProcessor;
@@ -33,7 +25,6 @@ import banana.core.request.PageRequest.PageEncoding;
 import banana.core.request.TransactionRequest;
 import banana.core.response.Page;
 import banana.core.util.CountableThreadPool;
-import redis.clients.jedis.Jedis;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
@@ -45,12 +36,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
-	private Map<String,DataProcessor> dataProcessors = new HashMap<String,DataProcessor>();
-	
-	private URLClassLoader externalClassLoader = new URLClassLoader(new URL[]{});
-
-	private String externalPath ;
-	
 	private DefaultPageDownloader defaultPageDownloader = new DefaultPageDownloader();
 	
 	private DefaultFileDownloader defaultFileDownloader = new DefaultFileDownloader(10);
@@ -61,7 +46,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	public DownloadTracker(String tId,int thread){
 		taskId = tId;
-		externalPath = DownloadServer.class.getClassLoader().getResource("").getPath() + "externalJar";
 		downloadThreadPool = new CountableThreadPool(thread, Executors.newCachedThreadPool());
 		fetchsize = thread * 3 < 10? 10 :thread * 3;
 	}
@@ -125,33 +109,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		return pageProcessor;
 	}
 	
-	private synchronized DataProcessor  addDataProcessor(String proccessClsName){
-		if(dataProcessors.get(proccessClsName) != null){
-			return dataProcessors.get(proccessClsName);
-		}
-		DataProcessor proccess = null;
-		try {
-			if (proccessClsName.equals("default")){
-				//proccess = new MongonDataProcessor();
-			}else{
-				Class<? extends DataProcessor> proccessCls = (Class<? extends DataProcessor>) externalClassLoader.loadClass(proccessClsName);
-				proccess = proccessCls.newInstance();
-			}
-			dataProcessors.put(proccessClsName , proccess );
-		} catch (Exception e) {
-			logger.warn(e.getMessage());
-		}
-		return proccess;
-	}
-	
-	public DataProcessor findDataProcessor(String proccessClsName) {
-		DataProcessor dataProcessor = dataProcessors.get(proccessClsName);
-		if(dataProcessor == null){
-			dataProcessor = addDataProcessor(proccessClsName);
-		}
-		return dataProcessor;
-	}
-	
 	/**
 	 * 离线处理
 	 * @param pageProccess
@@ -193,30 +150,10 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			e.printStackTrace();
 		}
 		if (objectContainer != null){
-			DataProcessor dp = findDataProcessor("default");
-			dp.handleData(objectContainer);
+			DownloadServer.getInstance().dataProcessor.handleData(objectContainer);
 		}
 	}
 
-	public boolean loadJar(String filename,byte[] jarBody) throws RemoteException{
-		//下载到本地后load jar
-		File jar = new File(externalPath +"/" + filename);
-		Method addURL = null;
-		try {
-			FileUtils.writeByteArrayToFile(jar, jarBody);
-			addURL = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
-			addURL.setAccessible(true);  
-			addURL.invoke(externalClassLoader, jar.toURI().toURL());
-		} catch (Exception e) {
-			throw new RemoteException(e.getMessage());
-		}finally{
-			if (addURL != null){
-				addURL.setAccessible(false);
-			}
-		}
-		return true;
-	}
-	
 	public final List<BasicRequest> pollRequests() throws CrawlerMasterException, InterruptedException {
 		while (true) {
 			if(downloadThreadPool.getIdleThreadCount() == 0){
@@ -270,11 +207,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	public void stop(){
 		isRuning = false;
 		downloadThreadPool.close();
-		try{
-			externalClassLoader.close();
-		}catch(Exception e){
-			logger.warn("",e);
-		}
 		try {
 			defaultPageDownloader.close();
 		} catch (IOException e) {

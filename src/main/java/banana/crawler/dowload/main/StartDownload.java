@@ -19,20 +19,24 @@ import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
 
 import banana.core.exception.CrawlerMasterException;
+import banana.core.processor.DataProcessor;
 import banana.core.protocol.DownloadProtocol;
+import banana.core.protocol.Extractor;
+import banana.core.protocol.processor.MongoDBDataProcessor;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.impl.DownloadServer;
+import banana.crawler.dowload.impl.JsonRpcExtractor;
 
 public class StartDownload {
 
-	public static void main(String[] args)
-			throws ParseException, HadoopIllegalArgumentException, IOException, CrawlerMasterException {
+	public static void main(String[] args) throws Exception {
 		args = (args == null || args.length == 0)?new String[]{"-h"}:args;
 		CommandLineParser parser = new BasicParser( );  
 		Options options = new Options();
 		options.addOption("h", "help", false, "Print this usage information");  
 		options.addOption("m", "master", true, "Set the mater host");
 		options.addOption("e", "extractor", true, "Set the extractor host");
+		options.addOption("mdb", "mongodb", true, "Set the mongodb host and username/password");
 		CommandLine commandLine = parser.parse( options, args );
 		HelpFormatter formatter = new HelpFormatter();
 		if(commandLine.hasOption('h') ) {  
@@ -43,18 +47,26 @@ public class StartDownload {
 		if(commandLine.hasOption('m')) {
 			master = commandLine.getOptionValue("m");
 		}
-		String extractor = "localhost";
+		Extractor extractor = null;
 		if(commandLine.hasOption('e')) {
-			extractor = commandLine.getOptionValue("e");
+			String extractorHost = commandLine.getOptionValue("e");
+			extractor = new JsonRpcExtractor(extractorHost);
+		}
+		DataProcessor dataProcessor = null;
+		if(commandLine.hasOption("mdb")){
+			String mongodbUrl = commandLine.getOptionValue("mdb");
+			dataProcessor = new MongoDBDataProcessor(mongodbUrl);
 		}
 		DownloadServer downloadServer = DownloadServer.initInstance(master);
+		downloadServer.extractor = extractor;
+		downloadServer.dataProcessor = dataProcessor;
 		if (downloadServer != null){
 			String localIp = SystemUtil.getLocalIP();
 			Server server = new RPC.Builder(new Configuration()).setProtocol(DownloadProtocol.class)
-	                .setInstance(downloadServer).setBindAddress(localIp).setPort(8787)
+	                .setInstance(downloadServer).setBindAddress("0.0.0.0").setPort(8777)
 	                .setNumHandlers(5).build();
 	        server.start();
-	        downloadServer.getMasterServer().registerDownloadNode(localIp);
+	        downloadServer.getMasterServer().registerDownloadNode(localIp,8777);
 		}
 	}
 }

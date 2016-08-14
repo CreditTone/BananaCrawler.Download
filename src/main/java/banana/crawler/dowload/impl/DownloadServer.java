@@ -13,8 +13,11 @@ import org.apache.log4j.Logger;
 import banana.core.JedisOperator;
 import banana.core.NodeStatus;
 import banana.core.exception.DownloadException;
+import banana.core.processor.DataProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.DownloadProtocol;
+import banana.core.protocol.Extractor;
+import banana.core.protocol.processor.MongoDBDataProcessor;
 import banana.core.util.SystemUtil;
 
 
@@ -30,17 +33,21 @@ public final class DownloadServer implements DownloadProtocol{
 
 	private JedisOperator redis;
 	
+	public Extractor extractor;
+	
+	public DataProcessor dataProcessor;
+	
 	private Map<String,DownloadTracker> downloadInstance = new HashMap<String,DownloadTracker>();
 	
 	private static DownloadServer instance = null;
 	
-	public static DownloadServer initInstance(String masterHost){
+	public static DownloadServer initInstance(String masterHost) throws Exception {
 		if (instance == null){
 			try {
 				instance = new DownloadServer(masterHost);
 			} catch (Exception e) {
 				logger.warn("请确认master已经启动", e);
-				return null;
+				throw e;
 			}
 		}
 		return instance;
@@ -50,16 +57,14 @@ public final class DownloadServer implements DownloadProtocol{
 		return instance;
 	}
 	
-	private DownloadServer(String masterHost){
-		try {
-			int port = 8787;
-			if (masterHost.contains(":")){
-				port = Integer.parseInt(masterHost.split(":")[1]);
-			}
-			master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(masterHost,port),new Configuration());
-		} catch (IOException e) {
-			e.printStackTrace();
+	private DownloadServer(String masterHost)throws Exception{
+		int port = 8666;
+		if (masterHost.contains(":")){
+			port = Integer.parseInt(masterHost.split(":")[1]);
 		}
+		master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(masterHost,port),new Configuration());
+		master.getMasterPropertie("");
+		System.out.println("已经连接到master");
 	}
 	
 	@Override
