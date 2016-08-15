@@ -16,8 +16,8 @@ import banana.core.download.impl.DefaultPageDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
 import banana.core.processor.PageProcessor;
+import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.Task;
-import banana.core.protocol.processor.JSONConfigPageProcessor;
 import banana.core.request.BasicRequest;
 import banana.core.request.BinaryRequest;
 import banana.core.request.PageRequest;
@@ -25,6 +25,7 @@ import banana.core.request.PageRequest.PageEncoding;
 import banana.core.request.TransactionRequest;
 import banana.core.response.Page;
 import banana.core.util.CountableThreadPool;
+import banana.crawler.dowload.processor.JSONConfigPageProcessor;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
@@ -42,12 +43,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private CountableThreadPool downloadThreadPool ;
 	
-	private int fetchsize;
-	
 	public DownloadTracker(String tId,int thread){
 		taskId = tId;
 		downloadThreadPool = new CountableThreadPool(thread, Executors.newCachedThreadPool());
-		fetchsize = thread * 3 < 10? 10 :thread * 3;
 	}
 	
 	public boolean isRuning() {
@@ -69,7 +67,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			}
 			Page page = defaultPageDownloader.download(pageRequest);
 			logger.info("抓取:"+pageRequest.getUrl()+"\tStatusCode:"+page.getStatus());
-			offlineHandle(pageProcessor, page);
+			processPage(pageProcessor, page);
 			break;
 		case TRANSACTION_REQUEST:
 			TransactionRequest transactionRequest = (TransactionRequest) request;
@@ -91,10 +89,10 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			return pageProcessors.get(processor);
 		}
 		PageProcessor processorInstance = null;
-		Task config = (Task) DownloadServer.getInstance().getMasterServer().getTaskPropertie(taskId, null);
+		Task config = DownloadServer.getInstance().getMasterServer().getConfig(taskId);
 		for (Task.Processor p : config.processors) {
 			if (processor.equals(p.getIndex())){
-				processorInstance = new JSONConfigPageProcessor(p);
+				processorInstance = new JSONConfigPageProcessor(p,DownloadServer.getInstance().extractor);
 				break;
 			}
 		}
@@ -115,7 +113,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	 * @param page
 	 * @return
 	 */
-	private final void offlineHandle(final PageProcessor pageProccess ,final Page page){
+	private final void processPage(final PageProcessor pageProccess ,final Page page){
 		int ret = page.getStatus() / 100;
 		PageRequest pr = (PageRequest) page.getRequest();
 		if (ret == 2){
@@ -124,8 +122,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
 			    pageProccess.process(page,null,newRequests,objectContainer);
 				handleResult(newRequests,objectContainer);
-				BasicRequest basicRequest = page.getRequest();
-			    basicRequest.notify(basicRequest.getUuid());
 			} catch (Exception e) {
 				e.printStackTrace();
 				logger.error("离线处理异常URL:"+pr.getUrl(),e);
@@ -135,7 +131,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				handleResult(Arrays.asList(page.getRequest()), null);
 				logger.warn("重新请求URL:"+ pr.getUrl());
 			}else{
-				pr.notify(pr.getUuid());
 				logger.error("下载次数超过" + 3 + ":"+pr.getUrl()+" 被丢弃");
 			}
 		}
@@ -145,7 +140,10 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	protected void handleResult(List<BasicRequest> newRequests, List<CrawlData> objectContainer) {
 		//跟进URL加入队列
 		try {
-			DownloadServer.getInstance().getMasterServer().pushTaskRequests(taskId, newRequests);
+			CrawlerMasterProtocol master = DownloadServer.getInstance().getMasterServer();
+			for (BasicRequest req : newRequests) {
+				master.pushTaskRequest(taskId, req);
+			}
 		} catch (CrawlerMasterException e) {
 			e.printStackTrace();
 		}
@@ -154,13 +152,13 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}
 	}
 
-	public final List<BasicRequest> pollRequests() throws CrawlerMasterException, InterruptedException {
+	public final BasicRequest pollRequest() throws CrawlerMasterException, InterruptedException {
 		while (true) {
 			if(downloadThreadPool.getIdleThreadCount() == 0){
 				Thread.sleep(100);
 				continue;//等待有线程可以工作
 			}
-			return DownloadServer.getInstance().getMasterServer().pollTaskRequests(taskId, fetchsize);
+			return DownloadServer.getInstance().getMasterServer().pollTaskRequest(taskId);
 		}
 	}
 	
@@ -180,18 +178,16 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		logger.info("DownloadTracker thread = " + downloadThreadPool.getThreadNum());
 		isRuning = true;
 		defaultPageDownloader.open();//打开下载器
-		List<BasicRequest> requests = null;
+		BasicRequest request = null;
 		while(true){
 			try{
-				requests = pollRequests();
-				if (isRuning && requests.isEmpty()){
+				request = pollRequest();
+				if (isRuning && request == null){
 					logger.info("Task "+ taskId +" queue is empty");
 					Thread.sleep(1000);
 					continue;
 				}
-				for (BasicRequest request : requests) {
-					asyncInvokeDownload(request);
-				}
+				asyncInvokeDownload(request);
 			}catch(Exception e){
 				logger.error("轮询队列出错",e);
 				break;
@@ -223,10 +219,5 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	public Page sendRequest(PageRequest request) {
 		Page page = defaultPageDownloader.download(request);
 		return page;
-	}
-
-	@Override
-	public void setFetchSize(int fetchsize) {
-		this.fetchsize = fetchsize;
 	}
 }

@@ -63,9 +63,9 @@ public class JsonRpcExtractor implements Extractor {
 			} 
 			socket = socketCache.take();
 			if (!socket.isClosed()){
-				System.out.println("connetion is closed " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
 				return socket;
 			}
+			System.out.println("connetion is closed " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
 		}
 	}
 	

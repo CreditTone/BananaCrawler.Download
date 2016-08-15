@@ -17,7 +17,6 @@ import banana.core.processor.DataProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Extractor;
-import banana.core.protocol.processor.MongoDBDataProcessor;
 import banana.core.util.SystemUtil;
 
 

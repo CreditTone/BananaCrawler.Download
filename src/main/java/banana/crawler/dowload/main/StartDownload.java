@@ -1,31 +1,21 @@
 package banana.crawler.dowload.main;
 
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.UnknownHostException;
-import java.rmi.Naming;
-import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
-import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
 
-import banana.core.exception.CrawlerMasterException;
 import banana.core.processor.DataProcessor;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Extractor;
-import banana.core.protocol.processor.MongoDBDataProcessor;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.impl.DownloadServer;
 import banana.crawler.dowload.impl.JsonRpcExtractor;
+import banana.crawler.dowload.processor.MongoDBDataProcessor;
 
 public class StartDownload {
 
@@ -37,7 +27,7 @@ public class StartDownload {
 		options.addOption("m", "master", true, "Set the mater host");
 		options.addOption("e", "extractor", true, "Set the extractor host");
 		options.addOption("mdb", "mongodb", true, "Set the mongodb host and username/password");
-		CommandLine commandLine = parser.parse( options, args );
+		CommandLine commandLine = parser.parse(options, args);
 		HelpFormatter formatter = new HelpFormatter();
 		if(commandLine.hasOption('h') ) {  
 		    formatter.printHelp("Downloader", options);
