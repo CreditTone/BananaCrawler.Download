@@ -1,8 +1,8 @@
 package banana.crawler.dowload.main;
 
-import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
@@ -21,7 +21,7 @@ public class StartDownload {
 
 	public static void main(String[] args) throws Exception {
 		args = (args == null || args.length == 0)?new String[]{"-h"}:args;
-		CommandLineParser parser = new BasicParser( );  
+		CommandLineParser parser = new DefaultParser();  
 		Options options = new Options();
 		options.addOption("h", "help", false, "Print this usage information");  
 		options.addOption("m", "master", true, "Set the mater host");
@@ -41,6 +41,7 @@ public class StartDownload {
 		if(commandLine.hasOption('e')) {
 			String extractorHost = commandLine.getOptionValue("e");
 			extractor = new JsonRpcExtractor(extractorHost);
+			extractor.parseData("{}", "<html></html>");
 		}
 		DataProcessor dataProcessor = null;
 		if(commandLine.hasOption("mdb")){

@@ -17,6 +17,7 @@ import banana.core.processor.DataProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Extractor;
+import banana.core.protocol.Task;
 import banana.core.util.SystemUtil;
 
 
@@ -80,11 +81,11 @@ public final class DownloadServer implements DownloadProtocol{
 	}
 	
 	@Override
-	public boolean startDownloadTracker(String taskId,int thread) throws DownloadException{
-		newDownloadTracker(taskId, thread);
+	public boolean startDownloadTracker(String taskId,int thread,Task config) throws DownloadException{
+		newDownloadTracker(taskId, thread, config);
 		DownloadTracker d = downloadInstance.get(taskId);
 		if (d == null){
-			throw new DownloadException("Can't find the downloader");
+			throw new DownloadException(String.format("Can't find the downloader for Id %s", taskId));
 		}else if (d.isRuning()){
 			throw new DownloadException("Downloader is already running");
 		}
@@ -92,22 +93,32 @@ public final class DownloadServer implements DownloadProtocol{
 		fetchLinkThread.start();
 		return true;
 	}
+	
+	@Override
+	public void resubmitTaskConfig(String taskId, int thread, Task config) throws DownloadException {
+		DownloadTracker d = downloadInstance.get(taskId);
+		if (d == null){
+			throw new DownloadException(String.format("Can't find the downloader for Id %s", taskId));
+		}
+		d.updateConfig(thread, config);
+	}
 
-	private void newDownloadTracker(String taskId, int thread) throws DownloadException{
+	private void newDownloadTracker(String taskId, int thread,Task config) throws DownloadException{
 		if (downloadInstance.keySet().contains(taskId)){
 			throw new DownloadException("TaskTracker is already existed");
 		}
-		downloadInstance.put(taskId, new DownloadTracker(taskId,thread));
+		downloadInstance.put(taskId, new DownloadTracker(taskId,thread,config));
 		logger.info("Create a DownloadTracker under the task " + taskId);
 	}
 	
 	@Override
-	public void stopDownloadTracker(String taskName) throws DownloadException {
-		DownloadTracker d = downloadInstance.get(taskName);
+	public void stopDownloadTracker(String taskId) throws DownloadException {
+		DownloadTracker d = downloadInstance.get(taskId);
 		if (d == null){
 			throw new DownloadException("Can't find the downloader");
 		}
 		d.stop();
+		downloadInstance.remove(taskId);
 	}
 
 	@Override
@@ -120,4 +131,14 @@ public final class DownloadServer implements DownloadProtocol{
 			throws IOException {
 		return new ProtocolSignature(DownloadProtocol.versionID,null);
 	}
+
+	@Override
+	public boolean isWaitRequest(String taskId) throws DownloadException {
+		DownloadTracker d = downloadInstance.get(taskId);
+		if (d == null){
+			throw new DownloadException("Can't find the downloader");
+		}
+		return d.isWaitRequest();
+	}
+
 }

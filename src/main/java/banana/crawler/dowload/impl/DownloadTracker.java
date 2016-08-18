@@ -14,17 +14,20 @@ import org.apache.log4j.Logger;
 import banana.core.download.impl.DefaultFileDownloader;
 import banana.core.download.impl.DefaultPageDownloader;
 import banana.core.exception.CrawlerMasterException;
+import banana.core.exception.DownloadException;
 import banana.core.modle.CrawlData;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.Task;
 import banana.core.request.BasicRequest;
 import banana.core.request.BinaryRequest;
+import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.PageRequest.PageEncoding;
 import banana.core.request.TransactionRequest;
 import banana.core.response.Page;
 import banana.core.util.CountableThreadPool;
+import banana.core.util.SystemUtil;
 import banana.crawler.dowload.processor.JSONConfigPageProcessor;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
@@ -33,23 +36,37 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private final String taskId;
 	
-	private boolean isRuning = false;
+	private Task config;
+	
+	private boolean runing = false;
+	
+	private boolean waitRequest = false;
 	
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
 	private DefaultPageDownloader defaultPageDownloader = new DefaultPageDownloader();
 	
-	private DefaultFileDownloader defaultFileDownloader = new DefaultFileDownloader(10);
+	private CountableThreadPool downloadThreadPool;
 	
-	private CountableThreadPool downloadThreadPool ;
-	
-	public DownloadTracker(String tId,int thread){
+	public DownloadTracker(String tId,int thread,Task taskConfig){
 		taskId = tId;
-		downloadThreadPool = new CountableThreadPool(thread, Executors.newCachedThreadPool());
+		config = taskConfig;
+		downloadThreadPool = new CountableThreadPool(thread);
 	}
 	
 	public boolean isRuning() {
-		return isRuning;
+		return runing;
+	}
+	
+	public boolean isWaitRequest(){
+		return waitRequest && (downloadThreadPool.getThreadAlive() == 0);
+	}
+	
+	public void updateConfig(int thread,Task taskConfig){
+		downloadThreadPool.setThread(thread);
+		config = taskConfig;
+		pageProcessors.clear();
+		logger.info(String.format("%s downloadTracker add %d thread", taskId, thread - downloadThreadPool.getThreadNum()));
 	}
 
 	private boolean download(BasicRequest request){
@@ -77,9 +94,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				download(child);
 			}
 			break;
-		case BINARY_REQUEST:
-			defaultFileDownloader.downloadFile((BinaryRequest) request);
-			break;
 		}
 		return true;
 	}
@@ -89,10 +103,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			return pageProcessors.get(processor);
 		}
 		PageProcessor processorInstance = null;
-		Task config = DownloadServer.getInstance().getMasterServer().getConfig(taskId);
-		for (Task.Processor p : config.processors) {
-			if (processor.equals(p.getIndex())){
-				processorInstance = new JSONConfigPageProcessor(p,DownloadServer.getInstance().extractor);
+		for (Task.Processor processorConfig : config.processors) {
+			if (processor.equals(processorConfig.getIndex())){
+				processorInstance = new JSONConfigPageProcessor(taskId, processorConfig, DownloadServer.getInstance().extractor);
 				break;
 			}
 		}
@@ -118,7 +131,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		PageRequest pr = (PageRequest) page.getRequest();
 		if (ret == 2){
 			try {
-				List<BasicRequest> newRequests = new ArrayList<BasicRequest>();
+				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
 			    pageProccess.process(page,null,newRequests,objectContainer);
 				handleResult(newRequests,objectContainer);
@@ -137,29 +150,36 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	}
 	
 	
-	protected void handleResult(List<BasicRequest> newRequests, List<CrawlData> objectContainer) {
+	protected void handleResult(List<HttpRequest> newRequests, List<CrawlData> objectContainer) {
 		//跟进URL加入队列
 		try {
 			CrawlerMasterProtocol master = DownloadServer.getInstance().getMasterServer();
-			for (BasicRequest req : newRequests) {
+			for (HttpRequest req : newRequests) {
 				master.pushTaskRequest(taskId, req);
 			}
 		} catch (CrawlerMasterException e) {
 			e.printStackTrace();
 		}
-		if (objectContainer != null){
-			DownloadServer.getInstance().dataProcessor.handleData(objectContainer);
+		try {
+			DownloadServer.getInstance().dataProcessor.process(objectContainer);
+		} catch (Exception e) {
+			logger.info(String.format("%s write data failure", taskId),e);
 		}
 	}
 
-	public final BasicRequest pollRequest() throws CrawlerMasterException, InterruptedException {
-		while (true) {
-			if(downloadThreadPool.getIdleThreadCount() == 0){
-				Thread.sleep(100);
-				continue;//等待有线程可以工作
-			}
-			return DownloadServer.getInstance().getMasterServer().pollTaskRequest(taskId);
+	public final HttpRequest pollRequest() throws CrawlerMasterException, InterruptedException {
+		HttpRequest newReq = null;
+		while(newReq == null && runing){
+			newReq = DownloadServer.getInstance().getMasterServer().pollTaskRequest(taskId);
+			waitRequest = (newReq == null);
 		}
+		while (true) {
+			if(downloadThreadPool.getIdleThreadCount() >= 0){
+				break;//有线程可以工作
+			}
+			Thread.sleep(10);
+		}
+		return newReq;
 	}
 	
 	private final void asyncInvokeDownload(final BasicRequest request){
@@ -176,43 +196,36 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		logger.info("DownloadTracker Starting ");
 		logger.info("DownloadTracker TaskId = " + taskId);
 		logger.info("DownloadTracker thread = " + downloadThreadPool.getThreadNum());
-		isRuning = true;
+		runing = true;
 		defaultPageDownloader.open();//打开下载器
 		BasicRequest request = null;
-		while(true){
+		while(runing){
 			try{
 				request = pollRequest();
-				if (isRuning && request == null){
-					logger.info("Task "+ taskId +" queue is empty");
-					Thread.sleep(1000);
-					continue;
+				if (request != null){
+					asyncInvokeDownload(request);
 				}
-				asyncInvokeDownload(request);
 			}catch(Exception e){
 				logger.error("轮询队列出错",e);
 				break;
 			}
-			if (!isRuning){
-				//销毁
-				break;
-			}
 		}
+		release();
 	}
 	
 	@Override
 	public void stop(){
-		isRuning = false;
+		runing = false;
+	}
+	
+	private void release() {
 		downloadThreadPool.close();
 		try {
 			defaultPageDownloader.close();
 		} catch (IOException e) {
-			logger.warn("",e);
+			e.printStackTrace();
 		}
-		try {
-			defaultFileDownloader.close();
-		} catch (IOException e) {
-			logger.warn("",e);
-		}
+		logger.info(String.format("%s DownloadTracker %s release", taskId, SystemUtil.getLocalIP()));
 	}
 	
 	@Override
