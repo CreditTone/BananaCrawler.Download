@@ -47,11 +47,9 @@ public class MongoDBDataProcessor implements DataProcessor {
 	}
 
 	@Override
-	public void process(List<CrawlData> objectContainer) {
-		int x = 0;
+	public void process(List<CrawlData> objectContainer,String ... collection) {
 		for (CrawlData data : objectContainer) {
-			db.getCollection(data.getTaskName()).insert(objectContainer.get(x).getData());
-			x++;
+			db.getCollection(collection[0]).insert(data.getData());
 		}
 	}
 	

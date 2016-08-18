@@ -161,7 +161,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			e.printStackTrace();
 		}
 		try {
-			DownloadServer.getInstance().dataProcessor.process(objectContainer);
+			DownloadServer.getInstance().dataProcessor.process(objectContainer, config.collection);
 		} catch (Exception e) {
 			logger.info(String.format("%s write data failure", taskId),e);
 		}
