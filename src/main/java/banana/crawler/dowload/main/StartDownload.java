@@ -29,7 +29,7 @@ public class StartDownload {
 		options.addOption("mdb", "mongodb", true, "Set the mongodb host and username/password");
 		CommandLine commandLine = parser.parse(options, args);
 		HelpFormatter formatter = new HelpFormatter();
-		if(commandLine.hasOption('h') ) {  
+		if(commandLine.hasOption('h') ) { 
 		    formatter.printHelp("Downloader", options);
 		    System.exit(0);  
 		}
