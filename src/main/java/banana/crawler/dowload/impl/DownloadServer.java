@@ -19,6 +19,7 @@ import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Extractor;
 import banana.core.protocol.Task;
 import banana.core.util.SystemUtil;
+import banana.crawler.dowload.processor.MongoDBDataProcessor;
 
 
 public final class DownloadServer implements DownloadProtocol{
@@ -31,8 +32,6 @@ public final class DownloadServer implements DownloadProtocol{
 	
 	private CrawlerMasterProtocol master = null;
 
-	private JedisOperator redis;
-	
 	public Extractor extractor;
 	
 	public DataProcessor dataProcessor;
@@ -50,6 +49,11 @@ public final class DownloadServer implements DownloadProtocol{
 				throw e;
 			}
 		}
+		String mongoAddress = instance.master.getMasterPropertie("MONGO").toString();
+		instance.dataProcessor = new MongoDBDataProcessor(mongoAddress);
+		String extractorAddress = instance.master.getMasterPropertie("EXTRACTOR").toString();
+		instance.extractor = new JsonRpcExtractor(extractorAddress);
+		instance.extractor.parseData("{}", "<html></html>");
 		return instance;
 	}
 	
@@ -74,10 +78,6 @@ public final class DownloadServer implements DownloadProtocol{
 	
 	public CrawlerMasterProtocol getMasterServer(){
 		return master;
-	}
-	
-	public JedisOperator getRedis(){
-		return redis;
 	}
 	
 	@Override

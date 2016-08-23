@@ -3,14 +3,16 @@ package banana.crawler.dowload.processor;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
-import com.mongodb.WriteResult;
 
 import banana.core.modle.CrawlData;
 import banana.core.processor.DataProcessor;
@@ -18,6 +20,8 @@ import banana.core.processor.DataProcessor;
 public class MongoDBDataProcessor implements DataProcessor {
 
 	private DB db;
+	
+	private static Set<String> collections = new HashSet<String>();
 
 	public MongoDBDataProcessor(String url) throws NumberFormatException, UnknownHostException {
 		String[] split = url.split(",");
@@ -49,17 +53,18 @@ public class MongoDBDataProcessor implements DataProcessor {
 	@Override
 	public void process(List<CrawlData> objectContainer,String ... collection) {
 		for (CrawlData data : objectContainer) {
+			if (!collections.contains(collection[0])){
+				if (!db.collectionExists(collection[0])){
+					synchronized (data) {
+						if (!db.collectionExists(collection[0])){
+							db.getCollection(collection[0]).createIndex("_task_name");
+						}
+					}
+				}
+				collections.add(collection[0]);
+			}
 			db.getCollection(collection[0]).insert(data.getData());
 		}
 	}
 	
-	//test code
-//	public static void main(String[] args) throws NumberFormatException, UnknownHostException {
-//		String url = "127.0.0.1,27017,crawler,crawler,crawler";
-//		MongoDBDataProcessor dataProcessor = new MongoDBDataProcessor(url);
-//		String data = "{\"a\":\"bbb\",\"b\":\"bbb\",\"c\":[{\"a\":\"aa\"},{\"b\":\"cccccc\"}]}";
-//		CrawlData crawlData = new CrawlData("taoao_123","http://www.taobao.com",data);
-//		dataProcessor.handleData(Arrays.asList(crawlData));
-//	}
-
 }

@@ -25,8 +25,6 @@ public class StartDownload {
 		Options options = new Options();
 		options.addOption("h", "help", false, "Print this usage information");  
 		options.addOption("m", "master", true, "Set the mater host");
-		options.addOption("e", "extractor", true, "Set the extractor host");
-		options.addOption("mdb", "mongodb", true, "Set the mongodb host and username/password");
 		CommandLine commandLine = parser.parse(options, args);
 		HelpFormatter formatter = new HelpFormatter();
 		if(commandLine.hasOption('h') ) { 
@@ -37,20 +35,7 @@ public class StartDownload {
 		if(commandLine.hasOption('m')) {
 			master = commandLine.getOptionValue("m");
 		}
-		Extractor extractor = null;
-		if(commandLine.hasOption('e')) {
-			String extractorHost = commandLine.getOptionValue("e");
-			extractor = new JsonRpcExtractor(extractorHost);
-			extractor.parseData("{}", "<html></html>");
-		}
-		DataProcessor dataProcessor = null;
-		if(commandLine.hasOption("mdb")){
-			String mongodbUrl = commandLine.getOptionValue("mdb");
-			dataProcessor = new MongoDBDataProcessor(mongodbUrl);
-		}
 		DownloadServer downloadServer = DownloadServer.initInstance(master);
-		downloadServer.extractor = extractor;
-		downloadServer.dataProcessor = dataProcessor;
 		if (downloadServer != null){
 			String localIp = SystemUtil.getLocalIP();
 			Server server = new RPC.Builder(new Configuration()).setProtocol(DownloadProtocol.class)

@@ -44,20 +44,4 @@ public class Properties {
 	public static Object getConfigPropertie(String propertie){
 		return properties.get(propertie);
 	}
-	
-	public static Object getTaskPropertie(String taskName,String propertie){
-		String key = taskName + "_" + propertie;
-		Object value = properties.get(key);
-		if (value != null){
-			return value;
-		}
-		try {
-			value = DownloadServer.getInstance().getMasterServer().getTaskPropertie(taskName, propertie);
-			properties.put(key, value);
-		}catch (Exception e) {
-			logger.warn("get propertie error",e);
-		}
-		return value;
-	}
-	
 }

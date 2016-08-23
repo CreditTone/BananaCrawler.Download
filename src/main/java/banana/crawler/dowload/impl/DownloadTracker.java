@@ -7,20 +7,16 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
 import org.apache.log4j.Logger;
 
-import banana.core.download.impl.DefaultFileDownloader;
 import banana.core.download.impl.DefaultPageDownloader;
 import banana.core.exception.CrawlerMasterException;
-import banana.core.exception.DownloadException;
 import banana.core.modle.CrawlData;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.Task;
 import banana.core.request.BasicRequest;
-import banana.core.request.BinaryRequest;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.PageRequest.PageEncoding;
@@ -83,7 +79,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				return false;
 			}
 			Page page = defaultPageDownloader.download(pageRequest);
-			logger.info("抓取:"+pageRequest.getUrl()+"\tStatusCode:"+page.getStatus());
+			logger.info("抓取:"+pageRequest.getUrl()+" StatusCode:"+page.getStatus());
 			processPage(pageProcessor, page);
 			break;
 		case TRANSACTION_REQUEST:
