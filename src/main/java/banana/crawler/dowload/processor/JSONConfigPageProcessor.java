@@ -60,6 +60,10 @@ public class JSONConfigPageProcessor implements PageProcessor {
 					Object attributeDefine = config.getCrawler_request()[i].get("attribute");
 					urlParseConfig.put("attribute",attributeDefine);
 				}
+				if (config.getCrawler_request()[i].containsKey("_root")){
+					Object _root = config.getCrawler_request()[i].get("_root");
+					urlParseConfig.put("_root", _root);
+				}
 				requestParser[i] = JSON.toJSONString(urlParseConfig);
 				urlParseConfig.clear();
 			}
