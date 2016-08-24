@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.ProtocolSignature;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.log4j.Logger;
@@ -49,11 +50,15 @@ public final class DownloadServer implements DownloadProtocol{
 				throw e;
 			}
 		}
-		String mongoAddress = instance.master.getMasterPropertie("MONGO").toString();
-		instance.dataProcessor = new MongoDBDataProcessor(mongoAddress);
-		String extractorAddress = instance.master.getMasterPropertie("EXTRACTOR").toString();
-		instance.extractor = new JsonRpcExtractor(extractorAddress);
-		instance.extractor.parseData("{}", "<html></html>");
+		Text mongoAddress = instance.master.getMasterPropertie("MONGO");
+		if (mongoAddress != null){
+			instance.dataProcessor = new MongoDBDataProcessor(mongoAddress.toString());
+		}
+		Text extractorAddress = instance.master.getMasterPropertie("EXTRACTOR");
+		if (extractorAddress != null){
+			instance.extractor = new JsonRpcExtractor(extractorAddress.toString());
+			instance.extractor.parseData("{}", "<html></html>");
+		}
 		return instance;
 	}
 	
@@ -64,11 +69,12 @@ public final class DownloadServer implements DownloadProtocol{
 	private DownloadServer(String masterHost)throws Exception{
 		int port = 8666;
 		if (masterHost.contains(":")){
-			port = Integer.parseInt(masterHost.split(":")[1]);
+			String[] split = masterHost.split(":");
+			masterHost = split[0];
+			port = Integer.parseInt(split[1]);
 		}
 		master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(masterHost,port),new Configuration());
 		master.getMasterPropertie("");
-		System.out.println("已经连接到master");
 	}
 	
 	@Override
