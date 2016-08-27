@@ -69,7 +69,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			}
 		}
 	}
-
+	
 
 	@Override
 	public void process(Page page, StartContext context, List<HttpRequest> queue, List<CrawlData> objectContainer)
