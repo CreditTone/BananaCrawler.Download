@@ -1,5 +1,6 @@
 package banana.crawler.dowload.processor;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,6 +10,10 @@ import java.util.Set;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.github.jknack.handlebars.Handlebars;
+import com.github.jknack.handlebars.Helper;
+import com.github.jknack.handlebars.Options;
+import com.github.jknack.handlebars.Template;
 
 import banana.core.modle.CrawlData;
 import banana.core.processor.PageProcessor;
@@ -16,6 +21,7 @@ import banana.core.protocol.Extractor;
 import banana.core.protocol.Task;
 import banana.core.protocol.Task.CrawlerData;
 import banana.core.protocol.Task.CrawlerRequest;
+import banana.core.protocol.Task.ExpandableHashMap;
 import banana.core.protocol.Task.Processor;
 import banana.core.request.HttpRequest;
 import banana.core.request.HttpRequest.Method;
@@ -25,7 +31,17 @@ import banana.core.response.Page;
 
 public class JSONConfigPageProcessor implements PageProcessor {
 	
+	private static final Handlebars handlebars = new ExpandHandlebars();
+	
 	private Task.Processor config;
+	
+	private String direct;
+	
+	private String define;
+	
+	private Map<String,String> page_context_define;
+	
+	private Map<String,String> task_context_define;
 	
 	private String[] dataParser;
 	
@@ -39,6 +55,38 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		this.config = config;
 		this.extractor = extractor;
 		this.taskId = taskId;
+		
+		if (config.getContent() != null){
+			if (config.getContent().direct != null) {
+				direct = JSON.toJSONString(config.getContent().direct);
+			}
+			if (config.getContent().define != null) {
+				define = JSON.toJSONString(config.getContent().define);
+			}
+		}
+		
+		if (config.getPage_context() != null){
+			page_context_define = new HashMap<String,String>();
+			for (Entry<String, Object> entry : config.getPage_context().entrySet()) {
+				if (entry.getValue() instanceof String){
+					page_context_define.put(entry.getKey(), (String) entry.getValue());
+				}else{
+					page_context_define.put(entry.getKey(), JSON.toJSONString(entry.getValue()));
+				}
+			}
+		}
+		
+		if (config.getTask_context() != null){
+			task_context_define = new HashMap<String,String>();
+			for (Entry<String, Object> entry : config.getTask_context().entrySet()) {
+				if (entry.getValue() instanceof String){
+					task_context_define.put(entry.getKey(), (String) entry.getValue());
+				}else{
+					task_context_define.put(entry.getKey(), JSON.toJSONString(entry.getValue()));
+				}
+			}
+		}
+		
 		if (config.getCrawler_data() != null){
 			this.dataParser = new String[config.getCrawler_data().length];
 			HashMap<String,Object> dataParseConfig = new HashMap<String,Object>();
@@ -55,7 +103,10 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			this.requestParser = new String[config.getCrawler_request().length];
 			HashMap<String,Object> urlParseConfig = new HashMap<String,Object>();
 			for (int i = 0 ;i < config.getCrawler_request().length ;i++) {
-				urlParseConfig.put("url",(String) config.getCrawler_request()[i].get("url"));
+				String urlXpath = (String) config.getCrawler_request()[i].get("url");
+				if (urlXpath != null){
+					urlParseConfig.put("url",urlXpath);
+				}
 				if (config.getCrawler_request()[i].containsKey("attribute")){
 					Object attributeDefine = config.getCrawler_request()[i].get("attribute");
 					urlParseConfig.put("attribute",attributeDefine);
@@ -63,6 +114,10 @@ public class JSONConfigPageProcessor implements PageProcessor {
 				if (config.getCrawler_request()[i].containsKey("_root")){
 					Object _root = config.getCrawler_request()[i].get("_root");
 					urlParseConfig.put("_root", _root);
+				}
+				if (config.getCrawler_request()[i].containsKey("_type")){
+					Object _type = config.getCrawler_request()[i].get("_type");
+					urlParseConfig.put("_type", _type);
 				}
 				requestParser[i] = JSON.toJSONString(urlParseConfig);
 				urlParseConfig.clear();
@@ -74,6 +129,29 @@ public class JSONConfigPageProcessor implements PageProcessor {
 	@Override
 	public void process(Page page, StartContext context, List<HttpRequest> queue, List<CrawlData> objectContainer)
 			throws Exception {
+		
+		Map<String,Object> pageContext = new HashMap<String,Object>();
+		RuntimeContext runtimeContext = new RuntimeContext(page.getRequest().getAttributes(), pageContext);
+		
+		if (direct != null){
+			String content = extractor.parseData(direct, page.getContent());
+			page.setContent(content);
+		}
+		
+		if (define != null){
+			String content = extractor.parseData(define, page.getContent());
+			page.setContent(content);
+		}
+		
+		if (page_context_define != null){
+			for (Entry<String, String> entry : page_context_define.entrySet()) {
+				String value = extractor.parseData(entry.getValue(), page.getContent());
+				if (value.length() > 0){
+					pageContext.put(entry.getKey(), value);
+				}
+			}
+		}
+		
 		String responseJson = null;
 		PageRequest currentPageReq = (PageRequest) page.getRequest();
 		if (dataParser != null){
@@ -81,14 +159,14 @@ public class JSONConfigPageProcessor implements PageProcessor {
 				responseJson = extractor.parseData(dataParser[i], page.getContent());
 				if (responseJson.startsWith("{")){
 					JSONObject json = JSON.parseObject(responseJson);
-					dataFollowAttribute(currentPageReq, context, config.getCrawler_data()[i], json);
+					dataFollowAttribute(runtimeContext, config.getCrawler_data()[i], json);
 					objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
 				}else if(responseJson.startsWith("[")){
 					JSONArray jsonArray = JSON.parseArray(responseJson);
 					JSONObject json = null;
 					for (int j = 0; j < jsonArray.size(); j++) {
 						json = jsonArray.getJSONObject(j);
-						dataFollowAttribute(currentPageReq, context, config.getCrawler_data()[i], json);
+						dataFollowAttribute(runtimeContext, config.getCrawler_data()[i], json);
 						objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
 					}
 				}
@@ -101,6 +179,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 				responseJson = extractor.parseData(requestParser[i], page.getContent());
 				if (responseJson.startsWith("{")){
 					JSONObject jsonObject = JSON.parseObject(responseJson);
+					dataFollowAttribute(runtimeContext, config.getCrawler_request()[i], jsonObject);
 					req = convertRequest(context, config.getCrawler_request()[i], jsonObject);
 					if (req != null){
 						fixUrlAndFollowAttribute(currentPageReq, req);
@@ -109,7 +188,9 @@ public class JSONConfigPageProcessor implements PageProcessor {
 				}else if(responseJson.startsWith("[")){
 					JSONArray jsonArray = JSON.parseArray(responseJson);
 					for (int j = 0; j < jsonArray.size(); j++) {
-						req = convertRequest(context, config.getCrawler_request()[i], jsonArray.getJSONObject(j));
+						JSONObject jsonObject = jsonArray.getJSONObject(j);
+						dataFollowAttribute(runtimeContext, config.getCrawler_request()[i], jsonObject);
+						req = convertRequest(context, config.getCrawler_request()[i], jsonObject);
 						if (req != null){
 							fixUrlAndFollowAttribute(currentPageReq, req);
 							queue.add(req);
@@ -118,21 +199,20 @@ public class JSONConfigPageProcessor implements PageProcessor {
 				}
 			}
 		}
-		
 	}
 	
-	private void dataFollowAttribute(PageRequest currentPageReq,StartContext context,CrawlerData config,JSONObject data){
+	private void dataFollowAttribute(RuntimeContext runtimeContext,ExpandableHashMap config,JSONObject data) throws IOException{
+		if (config.getCite().isEmpty()){
+			return;
+		}
 		for (Entry<String,Object> pair : config.getCite().entrySet()) {
 			String valueCite = pair.getValue().toString();
-			Object value = null;
-			if (valueCite.startsWith("$request.")){
-				value = currentPageReq.getAttribute(valueCite.substring(9, valueCite.length()));
-			}else if (valueCite.startsWith("$context.")){
-				value = context.getContextAttribute(valueCite.substring(9, valueCite.length()));
-			}else{
+			Template template = handlebars.compileInline(valueCite);
+			String result = template.apply(runtimeContext);
+			if (!result.isEmpty()){
+				data.put(pair.getKey(), result);
 				continue;
 			}
-			data.put(pair.getKey(), value);
 		}
 	}
 	
@@ -183,11 +263,21 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		if (jsonObject.containsKey("attribute")){
 			Map<String,Object> attribute = (Map<String, Object>) jsonObject.get("attribute");
 			for (Entry<String, Object> pair:attribute.entrySet()) {
-				req.addAttribute(pair.getKey(), pair.getValue());
+				String value = (String) pair.getValue();
+				if (value != null && value.length() > 0){
+					req.addAttribute(pair.getKey(), pair.getValue());
+				}
 			}
 		}
 		return req;
 	}
-
+	
+	private final class ExtractorParseConfig{
+		
+		public String condition;
+		
+		public String body;
+		
+	}
 
 }
