@@ -10,10 +10,6 @@ import java.util.Set;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.github.jknack.handlebars.Handlebars;
-import com.github.jknack.handlebars.Helper;
-import com.github.jknack.handlebars.Options;
-import com.github.jknack.handlebars.Template;
 
 import banana.core.modle.CrawlData;
 import banana.core.processor.PageProcessor;
@@ -31,8 +27,6 @@ import banana.core.response.Page;
 
 public class JSONConfigPageProcessor implements PageProcessor {
 	
-	private static final Handlebars handlebars = new ExpandHandlebars();
-	
 	private Task.Processor config;
 	
 	private String direct;
@@ -43,9 +37,9 @@ public class JSONConfigPageProcessor implements PageProcessor {
 	
 	private Map<String,String> task_context_define;
 	
-	private String[] dataParser;
+	private ExtractorParseConfig[] dataParser;
 	
-	private String[] requestParser;
+	private ExtractorParseConfig[] requestParser;
 	
 	private Extractor extractor;
 	
@@ -88,38 +82,51 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		}
 		
 		if (config.getCrawler_data() != null){
-			this.dataParser = new String[config.getCrawler_data().length];
+			this.dataParser = new ExtractorParseConfig[config.getCrawler_data().length];
 			HashMap<String,Object> dataParseConfig = new HashMap<String,Object>();
 			for (int i = 0 ;i < config.getCrawler_data().length ;i++) {
-				Set<String> keys = config.getCrawler_data()[i].keySet();
+				ExpandableHashMap item = config.getCrawler_data()[i];
+				ExtractorParseConfig epc = new ExtractorParseConfig();
+				Set<String> keys = item.keySet();
 				for (String key : keys) {
-					dataParseConfig.put(key, config.getCrawler_data()[i].get(key));
+					if (key.equals("_condition")){
+						epc.condition = (String) item.get("_condition");
+					}else{
+						dataParseConfig.put(key, config.getCrawler_data()[i].get(key));
+					}
 				}
-				dataParser[i] = JSON.toJSONString(dataParseConfig);
+				epc.body = JSON.toJSONString(dataParseConfig);
+				dataParser[i] = epc;
 				dataParseConfig.clear();
 			}
 		}
 		if (config.getCrawler_request() != null){
-			this.requestParser = new String[config.getCrawler_request().length];
+			this.requestParser = new ExtractorParseConfig[config.getCrawler_request().length];
 			HashMap<String,Object> urlParseConfig = new HashMap<String,Object>();
 			for (int i = 0 ;i < config.getCrawler_request().length ;i++) {
-				String urlXpath = (String) config.getCrawler_request()[i].get("url");
+				ExpandableHashMap item = config.getCrawler_request()[i];
+				ExtractorParseConfig epc = new ExtractorParseConfig();
+				if (item.containsKey("_condition")){
+					epc.condition = (String) item.get("_condition");
+				}
+				String urlXpath = (String) item.get("url");
 				if (urlXpath != null){
 					urlParseConfig.put("url",urlXpath);
 				}
-				if (config.getCrawler_request()[i].containsKey("attribute")){
-					Object attributeDefine = config.getCrawler_request()[i].get("attribute");
+				if (item.containsKey("attribute")){
+					Object attributeDefine = item.get("attribute");
 					urlParseConfig.put("attribute",attributeDefine);
 				}
-				if (config.getCrawler_request()[i].containsKey("_root")){
-					Object _root = config.getCrawler_request()[i].get("_root");
+				if (item.containsKey("_root")){
+					Object _root = item.get("_root");
 					urlParseConfig.put("_root", _root);
 				}
-				if (config.getCrawler_request()[i].containsKey("_type")){
-					Object _type = config.getCrawler_request()[i].get("_type");
+				if (item.containsKey("_type")){
+					Object _type = item.get("_type");
 					urlParseConfig.put("_type", _type);
 				}
-				requestParser[i] = JSON.toJSONString(urlParseConfig);
+				epc.body = JSON.toJSONString(urlParseConfig);
+				requestParser[i] = epc;
 				urlParseConfig.clear();
 			}
 		}
@@ -156,18 +163,22 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		PageRequest currentPageReq = (PageRequest) page.getRequest();
 		if (dataParser != null){
 			for (int i = 0; i < dataParser.length; i++) {
-				responseJson = extractor.parseData(dataParser[i], page.getContent());
-				if (responseJson.startsWith("{")){
-					JSONObject json = JSON.parseObject(responseJson);
-					dataFollowAttribute(runtimeContext, config.getCrawler_data()[i], json);
-					objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
-				}else if(responseJson.startsWith("[")){
-					JSONArray jsonArray = JSON.parseArray(responseJson);
-					JSONObject json = null;
-					for (int j = 0; j < jsonArray.size(); j++) {
-						json = jsonArray.getJSONObject(j);
-						dataFollowAttribute(runtimeContext, config.getCrawler_data()[i], json);
+				ExtractorParseConfig epc = dataParser[i];
+				CrawlerData cite = config.getCrawler_data()[i];
+				if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
+					responseJson = extractor.parseData(epc.body, page.getContent());
+					if (responseJson.startsWith("{")){
+						JSONObject json = JSON.parseObject(responseJson);
+						dataFollowAttribute(runtimeContext, cite, json);
 						objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
+					}else if(responseJson.startsWith("[")){
+						JSONArray jsonArray = JSON.parseArray(responseJson);
+						JSONObject json = null;
+						for (int j = 0; j < jsonArray.size(); j++) {
+							json = jsonArray.getJSONObject(j);
+							dataFollowAttribute(runtimeContext, cite, json);
+							objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
+						}
 					}
 				}
 			}
@@ -176,24 +187,28 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		if (requestParser != null){
 			PageRequest req = null;
 			for (int i = 0; i < requestParser.length; i++) {
-				responseJson = extractor.parseData(requestParser[i], page.getContent());
-				if (responseJson.startsWith("{")){
-					JSONObject jsonObject = JSON.parseObject(responseJson);
-					dataFollowAttribute(runtimeContext, config.getCrawler_request()[i], jsonObject);
-					req = convertRequest(context, config.getCrawler_request()[i], jsonObject);
-					if (req != null){
-						fixUrlAndFollowAttribute(currentPageReq, req);
-						queue.add(req);
-					}
-				}else if(responseJson.startsWith("[")){
-					JSONArray jsonArray = JSON.parseArray(responseJson);
-					for (int j = 0; j < jsonArray.size(); j++) {
-						JSONObject jsonObject = jsonArray.getJSONObject(j);
-						dataFollowAttribute(runtimeContext, config.getCrawler_request()[i], jsonObject);
-						req = convertRequest(context, config.getCrawler_request()[i], jsonObject);
+				ExtractorParseConfig epc = requestParser[i];
+				CrawlerRequest cite = config.getCrawler_request()[i];
+				if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
+					responseJson = extractor.parseData(epc.body, page.getContent());
+					if (responseJson.startsWith("{")){
+						JSONObject jsonObject = JSON.parseObject(responseJson);
+						dataFollowAttribute(runtimeContext, cite, jsonObject);
+						req = convertRequest(context, cite, jsonObject);
 						if (req != null){
 							fixUrlAndFollowAttribute(currentPageReq, req);
 							queue.add(req);
+						}
+					}else if(responseJson.startsWith("[")){
+						JSONArray jsonArray = JSON.parseArray(responseJson);
+						for (int j = 0; j < jsonArray.size(); j++) {
+							JSONObject jsonObject = jsonArray.getJSONObject(j);
+							dataFollowAttribute(runtimeContext, cite, jsonObject);
+							req = convertRequest(context, cite, jsonObject);
+							if (req != null){
+								fixUrlAndFollowAttribute(currentPageReq, req);
+								queue.add(req);
+							}
 						}
 					}
 				}
@@ -207,8 +222,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		}
 		for (Entry<String,Object> pair : config.getCite().entrySet()) {
 			String valueCite = pair.getValue().toString();
-			Template template = handlebars.compileInline(valueCite);
-			String result = template.apply(runtimeContext);
+			String result = runtimeContext.parse(valueCite);
 			if (!result.isEmpty()){
 				data.put(pair.getKey(), result);
 				continue;

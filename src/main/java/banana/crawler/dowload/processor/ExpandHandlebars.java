@@ -47,17 +47,25 @@ public class ExpandHandlebars extends Handlebars {
 		registerHelper("gt", new Helper<Object>() {
 
 			public Object apply(Object context, Options options) throws IOException {
-				float p0 = Float.parseFloat(options.param(0,0).toString());
-				float p1 = Float.parseFloat(options.param(1,0).toString());
+				float p0 = Float.parseFloat(((Object)options.param(0)).toString());
+				float p1 = Float.parseFloat(((Object)options.param(1)).toString());
 				return p0 > p1;
 			}
 		});
 		registerHelper("lt", new Helper<Object>() {
 
 			public Object apply(Object context, Options options) throws IOException {
-				float p0 = Float.parseFloat(options.param(0,0).toString());
-				float p1 = Float.parseFloat(options.param(1,0).toString());
+				float p0 = Float.parseFloat(((Object)options.param(0)).toString());
+				float p1 = Float.parseFloat(((Object)options.param(1)).toString());
 				return p0 < p1;
+			}
+		});
+		registerHelper("eq", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				Object s1 = options.param(0);
+				Object s2 = options.param(1);
+				return s1.equals(s2);
 			}
 		});
 		registerHelper("existKey", new Helper<Object>() {

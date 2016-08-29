@@ -1,10 +1,16 @@
 package banana.crawler.dowload.processor;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
+import com.github.jknack.handlebars.Handlebars;
+import com.github.jknack.handlebars.Template;
+
 public final class RuntimeContext implements Map<String,Object>{
+	
+	private static final Handlebars handlebars = new ExpandHandlebars();
 	
 	private Map<String,Object> requestAttribute;
 	
@@ -13,6 +19,11 @@ public final class RuntimeContext implements Map<String,Object>{
 	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext) {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
+	}
+	
+	public String parse(String line) throws IOException{
+		Template template = handlebars.compileInline(line);
+		return template.apply(this);
 	}
 	
 	@Override
