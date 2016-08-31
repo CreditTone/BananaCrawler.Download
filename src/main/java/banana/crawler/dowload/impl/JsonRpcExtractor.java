@@ -10,13 +10,15 @@ import java.util.Date;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.apache.log4j.Logger;
+
 import com.googlecode.jsonrpc4j.JsonRpcClient;
 
 import banana.core.protocol.Extractor;
 
-
-
 public class JsonRpcExtractor implements Extractor {
+	
+	private static Logger logger = Logger.getLogger(JsonRpcExtractor.class);
 	
 	private String remote;
 	
@@ -36,13 +38,9 @@ public class JsonRpcExtractor implements Extractor {
 			InputStream ips = socket.getInputStream();
 	        OutputStream ops = socket.getOutputStream();
 	        String params = config + "######" + body;
-			try {
-				reply = client.invokeAndReadResponse("Extractor.RpcParse", new Object[]{params}, String.class, ops, ips);
-			} catch (Throwable e) {
-				throw new Exception(e);
-			}
-		}catch(Exception e){
-			e.printStackTrace();
+			reply = client.invokeAndReadResponse("Extractor.RpcParse", new Object[]{params}, String.class, ops, ips);
+		}catch(Throwable e){
+			logger.warn(String.format("parse error %s", config), e);
 		}finally{
 			if (socket != null){
 				try {
