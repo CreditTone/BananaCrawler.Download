@@ -2,6 +2,7 @@ package banana.crawler.dowload.processor;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -24,6 +25,23 @@ public final class RuntimeContext implements Map<String,Object>{
 	public String parse(String line) throws IOException{
 		Template template = handlebars.compileInline(line);
 		return template.apply(this);
+	}
+	
+	public String parse(String line,Map<String,Object> temp) throws IOException{
+		Template template = handlebars.compileInline(line);
+		HashMap<String,Object> temp2 = new HashMap<String,Object>(temp){
+
+			@Override
+			public Object get(Object key) {
+				Object value = super.get(key);
+				if (value != null){
+					return value;
+				}
+				return RuntimeContext.this.get(key);
+			}
+			
+		};
+		return template.apply(temp2);
 	}
 	
 	@Override

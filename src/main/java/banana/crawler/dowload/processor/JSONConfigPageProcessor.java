@@ -168,12 +168,14 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			}
 		}
 		
+		Map<String,JSON> sendRequestData = new HashMap<String,JSON>();
 		String responseJson = null;
 		PageRequest currentPageReq = (PageRequest) page.getRequest();
 		if (dataParser != null){
 			for (int i = 0; i < dataParser.length; i++) {
 				ExtractorParseConfig epc = dataParser[i];
 				CrawlerData cite = config.getCrawler_data()[i];
+				JSONObject _data = (JSONObject) currentPageReq.getAttribute("_data");
 				if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
 					responseJson = extractor.parseData(epc.body, page.getContent());
 					if (responseJson == null){
@@ -181,8 +183,11 @@ public class JSONConfigPageProcessor implements PageProcessor {
 					}
 					if (responseJson.startsWith("{")){
 						JSONObject json = JSON.parseObject(responseJson);
-						dataFollowAttribute(runtimeContext, cite, json);
-						if (isWriteable(cite, json)){
+						dataFollowYingYong(runtimeContext, cite, json);
+						copy(_data, json);
+						if (cite.getSendRequest() != null){
+							sendRequestData.put(cite.getSendRequest(), json);
+						}else if (isWriteable(cite, json)){
 							objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
 						}
 					}else if(responseJson.startsWith("[")){
@@ -190,9 +195,17 @@ public class JSONConfigPageProcessor implements PageProcessor {
 						JSONObject json = null;
 						for (int j = 0; j < jsonArray.size(); j++) {
 							json = jsonArray.getJSONObject(j);
-							dataFollowAttribute(runtimeContext, cite, json);
-							if (isWriteable(cite, json)){
-								objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
+							dataFollowYingYong(runtimeContext, cite, json);
+							copy(_data, json);
+						}
+						if (cite.getSendRequest() != null){
+							sendRequestData.put(cite.getSendRequest(), jsonArray);
+						}else {
+							for (int j = 0; j < jsonArray.size(); j++) {
+								json = jsonArray.getJSONObject(j);
+								if (isWriteable(cite, json)){
+									objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
+								}
 							}
 						}
 					}
@@ -205,14 +218,52 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			for (int i = 0; i < requestParser.length; i++) {
 				ExtractorParseConfig epc = requestParser[i];
 				CrawlerRequest cite = config.getCrawler_request()[i];
-				if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
+				if (cite.getCite().get("url") != null || (cite.getTag() != null && sendRequestData.containsKey(cite.getTag()))){
+					String urlDefine = (String) cite.getCite().get("url");
+					JSON requestData = sendRequestData.get(cite.getTag());
+					if (requestData != null){
+						if (requestData instanceof JSONObject) {
+							String url = runtimeContext.parse(urlDefine,(Map)requestData);
+							JSONObject jsonObject = new JSONObject();
+							jsonObject.put("url", url);
+							req = convertRequest(context, cite, jsonObject);
+							if (req != null){
+								fixUrlAndFollowAttribute(currentPageReq, req);
+								req.addAttribute("_data", requestData);
+								queue.add(req);
+							}
+						}else if (requestData instanceof JSONArray) {
+							JSONArray requestDataArr = (JSONArray) requestData;
+							for (int j = 0; j < requestDataArr.size(); j++) {
+								String url = runtimeContext.parse(urlDefine,(Map)requestDataArr.get(j));
+								JSONObject jsonObject = new JSONObject();
+								jsonObject.put("url", url);
+								req = convertRequest(context, cite, jsonObject);
+								if (req != null){
+									fixUrlAndFollowAttribute(currentPageReq, req);
+									req.addAttribute("_data", requestDataArr.get(j));
+									queue.add(req);
+								}
+							}
+						}
+					}else{
+						String url = runtimeContext.parse(urlDefine);
+						JSONObject jsonObject = new JSONObject();
+						jsonObject.put("url", url);
+						req = convertRequest(context, cite, jsonObject);
+						if (req != null){
+							fixUrlAndFollowAttribute(currentPageReq, req);
+							queue.add(req);
+						}
+					}
+				}else if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
 					responseJson = extractor.parseData(epc.body, page.getContent());
 					if (responseJson == null){
 						continue;
 					}
 					if (responseJson.startsWith("{")){
 						JSONObject jsonObject = JSON.parseObject(responseJson);
-						dataFollowAttribute(runtimeContext, cite, jsonObject);
+						dataFollowYingYong(runtimeContext, cite, jsonObject);
 						req = convertRequest(context, cite, jsonObject);
 						if (req != null){
 							fixUrlAndFollowAttribute(currentPageReq, req);
@@ -222,7 +273,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 						JSONArray jsonArray = JSON.parseArray(responseJson);
 						for (int j = 0; j < jsonArray.size(); j++) {
 							JSONObject jsonObject = jsonArray.getJSONObject(j);
-							dataFollowAttribute(runtimeContext, cite, jsonObject);
+							dataFollowYingYong(runtimeContext, cite, jsonObject);
 							req = convertRequest(context, cite, jsonObject);
 							if (req != null){
 								fixUrlAndFollowAttribute(currentPageReq, req);
@@ -244,11 +295,10 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			fields[i] = jsonObject.getString(config.getUnique(i));
 		}
 		boolean exists = DownloadServer.getInstance().getMasterServer().filterQuery(taskId, fields).get();
-		System.out.println("filterQuery exist " + fields[0] + " " + exists);
 		return !exists;
 	}
 	
-	private final void dataFollowAttribute(RuntimeContext runtimeContext,ExpandableHashMap config,JSONObject data) throws IOException{
+	private final void dataFollowYingYong(RuntimeContext runtimeContext,ExpandableHashMap config,JSONObject data) throws IOException{
 		if (config.getCite().isEmpty()){
 			return;
 		}
@@ -318,6 +368,12 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			req.setPriority((int) config.get("priority"));
 		}
 		return req;
+	}
+	
+	private final static void copy(JSONObject from,JSONObject to){
+		if (from != null){
+			to.putAll(from);
+		}
 	}
 	
 	private final class ExtractorParseConfig{
