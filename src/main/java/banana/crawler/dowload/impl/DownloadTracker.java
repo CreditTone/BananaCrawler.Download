@@ -66,7 +66,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	}
 
 	private boolean download(BasicRequest request){
-		System.out.println("验证rmi多线程:"+Thread.currentThread().getId());
 		switch(request.getType()){
 		case PAGE_REQUEST:
 			final PageRequest pageRequest = (PageRequest) request;

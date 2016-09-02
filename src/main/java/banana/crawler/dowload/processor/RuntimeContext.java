@@ -27,9 +27,9 @@ public final class RuntimeContext implements Map<String,Object>{
 		return template.apply(this);
 	}
 	
-	public String parse(String line,Map<String,Object> temp) throws IOException{
+	public String parse(String line,Map<String,Object> dataContext) throws IOException{
 		Template template = handlebars.compileInline(line);
-		HashMap<String,Object> temp2 = new HashMap<String,Object>(temp){
+		HashMap<String,Object> temp = new HashMap<String,Object>(dataContext){
 
 			@Override
 			public Object get(Object key) {
@@ -41,7 +41,7 @@ public final class RuntimeContext implements Map<String,Object>{
 			}
 			
 		};
-		return template.apply(temp2);
+		return template.apply(temp);
 	}
 	
 	@Override

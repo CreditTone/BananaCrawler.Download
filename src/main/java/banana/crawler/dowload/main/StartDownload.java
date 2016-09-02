@@ -27,7 +27,7 @@ public class StartDownload {
 		options.addOption("m", "master", true, "Set the mater host");
 		CommandLine commandLine = parser.parse(options, args);
 		HelpFormatter formatter = new HelpFormatter();
-		if(commandLine.hasOption('h') ) { 
+		if(commandLine.hasOption('h') ) {
 		    formatter.printHelp("Downloader", options);
 		    System.exit(0);  
 		}

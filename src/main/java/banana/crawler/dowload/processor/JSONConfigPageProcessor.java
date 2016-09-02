@@ -185,27 +185,31 @@ public class JSONConfigPageProcessor implements PageProcessor {
 						JSONObject json = JSON.parseObject(responseJson);
 						dataFollowYingYong(runtimeContext, cite, json);
 						copy(_data, json);
-						if (cite.getSendRequest() != null){
-							sendRequestData.put(cite.getSendRequest(), json);
-						}else if (isWriteable(cite, json)){
-							objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
+						if (!dataCrawled(cite, json)){
+							if (cite.getSendRequest() != null){
+								sendRequestData.put(cite.getSendRequest(), json);
+							}else{
+								objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
+							}
 						}
 					}else if(responseJson.startsWith("[")){
 						JSONArray jsonArray = JSON.parseArray(responseJson);
+						JSONArray filtedArray = new JSONArray();
 						JSONObject json = null;
 						for (int j = 0; j < jsonArray.size(); j++) {
 							json = jsonArray.getJSONObject(j);
 							dataFollowYingYong(runtimeContext, cite, json);
 							copy(_data, json);
+							if (!dataCrawled(cite, json)){
+								filtedArray.add(json);
+							}
 						}
 						if (cite.getSendRequest() != null){
-							sendRequestData.put(cite.getSendRequest(), jsonArray);
-						}else {
-							for (int j = 0; j < jsonArray.size(); j++) {
-								json = jsonArray.getJSONObject(j);
-								if (isWriteable(cite, json)){
-									objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
-								}
+							sendRequestData.put(cite.getSendRequest(), filtedArray);
+						}else{
+							for (int j = 0; j < filtedArray.size(); j++) {
+								json = filtedArray.getJSONObject(j);
+								objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
 							}
 						}
 					}
@@ -286,16 +290,16 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		}
 	}
 	
-	private final boolean isWriteable(ExpandableHashMap config,JSONObject jsonObject){
+	private final boolean dataCrawled(ExpandableHashMap config,JSONObject jsonObject){
 		if (config.getUnique() == null){
-			return true;
+			return false;
 		}
 		String[] fields = new String[config.getUnique().size()];
 		for (int i = 0; i < fields.length; i++) {
 			fields[i] = jsonObject.getString(config.getUnique(i));
 		}
 		boolean exists = DownloadServer.getInstance().getMasterServer().filterQuery(taskId, fields).get();
-		return !exists;
+		return exists;
 	}
 	
 	private final void dataFollowYingYong(RuntimeContext runtimeContext,ExpandableHashMap config,JSONObject data) throws IOException{
@@ -372,7 +376,12 @@ public class JSONConfigPageProcessor implements PageProcessor {
 	
 	private final static void copy(JSONObject from,JSONObject to){
 		if (from != null){
-			to.putAll(from);
+			for (Entry<String,Object> entry : from.entrySet()) {
+				if (to.containsKey(entry.getKey())){
+					continue;
+				}
+				to.put(entry.getKey(), entry.getValue());
+			}
 		}
 	}
 	
