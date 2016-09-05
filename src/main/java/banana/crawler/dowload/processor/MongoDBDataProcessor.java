@@ -44,8 +44,9 @@ public class MongoDBDataProcessor implements DataProcessor {
 		build.connectionsPerHost(50);
 		// 如果当前所有的connection都在使用中，则每个connection上可以有50个线程排队等待
 		build.threadsAllowedToBlockForConnectionMultiplier(50);
-		build.connectTimeout(1 * 60 * 1000);
-		build.maxWaitTime(2 * 60 * 1000);
+		build.connectTimeout(60 * 1000);
+		build.maxWaitTime(60 * 1000);
+		build.socketTimeout(60 * 1000);
 		MongoClientOptions options = build.build();
 		return options;
 	}

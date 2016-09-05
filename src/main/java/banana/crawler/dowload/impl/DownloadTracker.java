@@ -78,7 +78,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				return false;
 			}
 			Page page = defaultPageDownloader.download(pageRequest);
-			logger.info("抓取:"+pageRequest.getUrl()+" StatusCode:"+page.getStatus());
+			logger.info(pageRequest.getUrl()+" StatusCode:"+page.getStatus());
 			processPage(pageProcessor, page);
 			break;
 		case TRANSACTION_REQUEST:
