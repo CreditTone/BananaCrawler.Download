@@ -211,6 +211,13 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	@Override
 	public void stop(){
 		runing = false;
+		while(!downloadThreadPool.isShutdown()){
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 	
 	private void release() {

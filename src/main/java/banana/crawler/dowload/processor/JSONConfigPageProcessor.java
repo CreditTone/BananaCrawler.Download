@@ -31,6 +31,12 @@ import banana.crawler.dowload.impl.DownloadServer;
 
 public class JSONConfigPageProcessor implements PageProcessor {
 	
+	public static final int RUN_MODE = 0;
+	
+	public static final int TEST_MODE = 1;
+	
+	public static int MODE = RUN_MODE;
+	
 	private static Logger logger = Logger.getLogger(JSONConfigPageProcessor.class);
 	
 	private Task.Processor config;
@@ -222,7 +228,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 			for (int i = 0; i < requestParser.length; i++) {
 				ExtractorParseConfig epc = requestParser[i];
 				CrawlerRequest cite = config.getCrawler_request()[i];
-				if (cite.getCite().get("url") != null || (cite.getTag() != null && sendRequestData.containsKey(cite.getTag()))){
+				if (cite.getTag() != null && sendRequestData.containsKey(cite.getTag())){
 					String urlDefine = (String) cite.getCite().get("url");
 					JSON requestData = sendRequestData.get(cite.getTag());
 					if (requestData != null){
@@ -291,7 +297,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 	}
 	
 	private final boolean dataCrawled(ExpandableHashMap config,JSONObject jsonObject){
-		if (config.getUnique() == null){
+		if (config.getUnique() == null || MODE == TEST_MODE){
 			return false;
 		}
 		String[] fields = new String[config.getUnique().size()];

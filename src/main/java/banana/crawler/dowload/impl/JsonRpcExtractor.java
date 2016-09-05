@@ -57,7 +57,11 @@ public class JsonRpcExtractor implements Extractor {
 		Socket socket = null;
 		while(true){
 			if (socketCache.isEmpty()){
-				return new Socket(remote, 8585); 
+				Socket so = new Socket(remote, 8585);
+				so.setTcpNoDelay(true);
+				so.setKeepAlive(true);
+				so.setSoTimeout(1000 * 60);
+				return so; 
 			} 
 			socket = socketCache.take();
 			if (!socket.isClosed()){
