@@ -2,6 +2,8 @@ package banana.crawler.dowload.processor;
 
 import java.io.IOException;
 
+import org.apache.commons.lang.StringEscapeUtils;
+
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
@@ -76,7 +78,23 @@ public class ExpandHandlebars extends Handlebars {
 				return runtimeContext.containsKey(key);
 			}
 		});
+		registerHelper("fixKey", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String url = options.param(0);
+				for (int i = 1; i < options.params.length; i++) {
+					url = fixKey(url, (String)options.param(i));
+				}
+				return url;
+			}
+		});
 		
+	}
+	
+	private static String fixKey(String url,String key) {
+		String regex = key + "=[\\w]+(&|\\s*)";
+		url = url.replaceAll(regex, "");
+		return url;
 	}
 	
 }

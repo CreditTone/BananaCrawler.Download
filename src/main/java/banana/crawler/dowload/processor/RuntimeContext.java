@@ -6,44 +6,46 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.lang.StringEscapeUtils;
+
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
 
-public final class RuntimeContext implements Map<String,Object>{
-	
+public final class RuntimeContext implements Map<String, Object> {
+
 	private static final Handlebars handlebars = new ExpandHandlebars();
-	
-	private Map<String,Object> requestAttribute;
-	
-	private Map<String,Object> pageContext;
+
+	private Map<String, Object> requestAttribute;
+
+	private Map<String, Object> pageContext;
 
 	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext) {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
 	}
-	
-	public String parse(String line) throws IOException{
+
+	public String parse(String line) throws IOException {
 		Template template = handlebars.compileInline(line);
-		return template.apply(this);
+		return StringEscapeUtils.unescapeHtml(template.apply(this));
 	}
-	
-	public String parse(String line,Map<String,Object> dataContext) throws IOException{
+
+	public String parse(String line, Map<String, Object> dataContext) throws IOException {
 		Template template = handlebars.compileInline(line);
-		HashMap<String,Object> temp = new HashMap<String,Object>(dataContext){
+		HashMap<String, Object> temp = new HashMap<String, Object>(dataContext) {
 
 			@Override
 			public Object get(Object key) {
 				Object value = super.get(key);
-				if (value != null){
+				if (value != null) {
 					return value;
 				}
 				return RuntimeContext.this.get(key);
 			}
-			
+
 		};
 		return template.apply(temp);
 	}
-	
+
 	@Override
 	public int size() {
 		return requestAttribute.size() + pageContext.size();
@@ -67,7 +69,7 @@ public final class RuntimeContext implements Map<String,Object>{
 	@Override
 	public Object get(Object key) {
 		Object value = requestAttribute.get(key);
-		if (value == null){
+		if (value == null) {
 			value = pageContext.get(key);
 		}
 		return value;

@@ -1,11 +1,14 @@
 package banana.crawler.dowload.processor;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
 
 import java.util.Set;
@@ -148,10 +151,13 @@ public class JSONConfigPageProcessor implements PageProcessor {
 	@Override
 	public void process(Page page, StartContext context, List<HttpRequest> queue, List<CrawlData> objectContainer)
 			throws Exception {
-		
 		Map<String,Object> pageContext = new HashMap<String,Object>();
+		pageContext.put("_current_url", page.getRequest().getUrl());
+		List<NameValuePair> pair = page.getRequest().getNameValuePairs();
+		for (NameValuePair pr : pair) {
+			pageContext.put(pr.getName(), pr.getValue());
+		}
 		RuntimeContext runtimeContext = new RuntimeContext(page.getRequest().getAttributes(), pageContext);
-		
 		if (direct != null){
 			String content = extractor.parseData(direct, page.getContent());
 			if (content == null)return;

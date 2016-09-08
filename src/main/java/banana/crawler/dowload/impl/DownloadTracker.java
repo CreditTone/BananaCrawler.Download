@@ -36,6 +36,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private boolean runing = false;
 	
+	private boolean stoped = false;
+	
 	private boolean waitRequest = false;
 	
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
@@ -211,7 +213,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	@Override
 	public void stop(){
 		runing = false;
-		while(!downloadThreadPool.isShutdown()){
+		while(!stoped){
 			try {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {
@@ -227,6 +229,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		stoped = true;
 		logger.info(String.format("%s DownloadTracker %s release", taskId, SystemUtil.getLocalIP()));
 	}
 	
