@@ -85,6 +85,9 @@ public class ExpandHandlebars extends Handlebars {
 				for (int i = 1; i < options.params.length; i++) {
 					url = fixKey(url, (String)options.param(i));
 				}
+				while(url.endsWith("&")){
+					url = url.substring(0, url.length()-1);
+				}
 				return url;
 			}
 		});

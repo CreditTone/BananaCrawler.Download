@@ -17,7 +17,7 @@ import banana.crawler.dowload.impl.DownloadServer;
 import banana.crawler.dowload.impl.JsonRpcExtractor;
 import banana.crawler.dowload.processor.MongoDBDataProcessor;
 
-public class StartDownload {
+public class StartDownloader {
 
 	public static void main(String[] args) throws Exception {
 		args = (args == null || args.length == 0)?new String[]{"-h"}:args;
