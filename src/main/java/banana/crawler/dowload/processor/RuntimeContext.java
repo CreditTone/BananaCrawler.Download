@@ -3,13 +3,18 @@ package banana.crawler.dowload.processor;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.http.NameValuePair;
 
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
+
+import banana.core.request.HttpRequest;
+import banana.core.request.StartContext;
 
 public final class RuntimeContext implements Map<String, Object> {
 
@@ -18,34 +23,61 @@ public final class RuntimeContext implements Map<String, Object> {
 	private Map<String, Object> requestAttribute;
 
 	private Map<String, Object> pageContext;
+	
+	private Map<String, Object> dataContext;
+	
+	public static final RuntimeContext create(HttpRequest request,StartContext context){
+		Map<String,Object> pageContext = new HashMap<String,Object>();
+		pageContext.put("_current_url", request.getUrl());
+		List<NameValuePair> pair = request.getNameValuePairs();
+		for (NameValuePair pr : pair) {
+			pageContext.put(pr.getName(), pr.getValue());
+		}
+		RuntimeContext runtimeContext = new RuntimeContext(request.getAttributes(), pageContext);
+		return runtimeContext;
+	}
 
 	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext) {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
+		put("_", "");
+	}
+	
+	public String parse(String line) throws IOException {
+		return parse(line, null);
 	}
 
-	public String parse(String line) throws IOException {
+	public String parse(String line, Map<String, Object> tempDataContext) throws IOException {
+		if (!line.contains("{{")){
+			return line;
+		}
 		Template template = handlebars.compileInline(line);
+		if (tempDataContext != null){
+			HashMap<String, Object> temp = new HashMap<String, Object>(tempDataContext) {
+
+				@Override
+				public Object get(Object key) {
+					Object value = super.get(key);
+					if (value != null) {
+						return value;
+					}
+					return RuntimeContext.this.get(key);
+				}
+
+			};
+			return StringEscapeUtils.unescapeHtml(template.apply(temp));
+		}
 		return StringEscapeUtils.unescapeHtml(template.apply(this));
 	}
-
-	public String parse(String line, Map<String, Object> dataContext) throws IOException {
-		Template template = handlebars.compileInline(line);
-		HashMap<String, Object> temp = new HashMap<String, Object>(dataContext) {
-
-			@Override
-			public Object get(Object key) {
-				Object value = super.get(key);
-				if (value != null) {
-					return value;
-				}
-				return RuntimeContext.this.get(key);
-			}
-
-		};
-		return template.apply(temp);
+	
+	public void setDataContext(Map<String, Object> dataContext){
+		this.dataContext = dataContext;
 	}
-
+	
+	public void setDataContextNull(){
+		this.dataContext = null;
+	}
+	
 	@Override
 	public int size() {
 		return requestAttribute.size() + pageContext.size();
@@ -68,16 +100,23 @@ public final class RuntimeContext implements Map<String, Object> {
 
 	@Override
 	public Object get(Object key) {
-		Object value = requestAttribute.get(key);
-		if (value == null) {
-			value = pageContext.get(key);
+		Object value = null;
+		if (dataContext != null){
+			value = dataContext.get(key);
 		}
-		return value;
+		if (value != null){
+			return value;
+		}
+		value = requestAttribute.get(key);
+		if (value != null){
+			return value;
+		}
+		return pageContext.get(key);
 	}
 
 	@Override
 	public Object put(String key, Object value) {
-		throw new UnsupportedOperationException();
+		return pageContext.put(key, value);
 	}
 
 	@Override

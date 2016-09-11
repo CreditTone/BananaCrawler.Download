@@ -25,6 +25,7 @@ import banana.core.response.Page;
 import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.processor.JSONConfigPageProcessor;
+import banana.crawler.dowload.processor.ProcessorForwarder;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
@@ -67,7 +68,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		logger.info(String.format("%s downloadTracker add %d thread", taskId, thread - downloadThreadPool.getThreadNum()));
 	}
 
-	private boolean download(BasicRequest request){
+	private final boolean download(BasicRequest request){
 		switch(request.getType()){
 		case PAGE_REQUEST:
 			final PageRequest pageRequest = (PageRequest) request;
@@ -80,7 +81,11 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				return false;
 			}
 			Page page = defaultPageDownloader.download(pageRequest);
-			logger.info(pageRequest.getUrl()+" StatusCode:"+page.getStatus());
+			if (pageRequest.getMethod() == HttpRequest.Method.POST){
+				logger.info(String.format("%s Post:%s StatusCode:%s", pageRequest.getUrl(), pageRequest.getParams(), page.getStatus()));
+			}else{
+				logger.info(String.format("%s StatusCode:%s", pageRequest.getUrl(), page.getStatus()));
+			}
 			processPage(pageProcessor, page);
 			break;
 		case TRANSACTION_REQUEST:
@@ -99,14 +104,17 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		if(pageProcessors.get(processor) != null){
 			return pageProcessors.get(processor);
 		}
-		PageProcessor processorInstance = null;
-		for (Task.Processor processorConfig : config.processors) {
-			if (processor.equals(processorConfig.getIndex())){
-				processorInstance = new JSONConfigPageProcessor(taskId, processorConfig, DownloadServer.getInstance().extractor);
-				break;
+		for (Task.ProcessorForwarder forwarderConfig : config.forwarders) {
+			if (processor.equals(forwarderConfig.getIndex())){
+				return new ProcessorForwarder(taskId, forwarderConfig, this);
 			}
 		}
-		return processorInstance;
+		for (Task.Processor processorConfig : config.processors) {
+			if (processor.equals(processorConfig.getIndex())){
+				return new JSONConfigPageProcessor(taskId, processorConfig, DownloadServer.getInstance().extractor);
+			}
+		}
+		return null;
 	}
 	
 	public PageProcessor findPageProcessor(String processor) {
@@ -119,18 +127,21 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	/**
 	 * 离线处理
-	 * @param pageProccess
+	 * @param pageProcessor
 	 * @param page
 	 * @return
 	 */
-	private final void processPage(final PageProcessor pageProccess ,final Page page){
+	private final void processPage(final PageProcessor pageProcessor ,final Page page){
 		int ret = page.getStatus() / 100;
 		PageRequest pr = (PageRequest) page.getRequest();
 		if (ret == 2){
 			try {
 				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
-			    pageProccess.process(page,null,newRequests,objectContainer);
+			    pageProcessor.process(page,null,newRequests,objectContainer);
+			    for (HttpRequest request : newRequests) {
+					request.baseRequest(page.getRequest());
+				}
 				handleResult(newRequests,objectContainer);
 			} catch (Exception e) {
 				e.printStackTrace();

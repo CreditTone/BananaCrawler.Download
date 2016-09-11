@@ -1,8 +1,13 @@
 package banana.crawler.dowload.processor;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
-import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
@@ -82,22 +87,75 @@ public class ExpandHandlebars extends Handlebars {
 
 			public Object apply(Object context, Options options) throws IOException {
 				String url = options.param(0);
+				if (!url.contains("?")){
+					return url;
+				}
+				String[] urlData  = url.split("\\?");
+				String baseUrl = urlData[0];
+				String querys  = urlData[1];
+				List<NameValuePair> pair = URLEncodedUtils.parse(querys, Charset.defaultCharset());
 				for (int i = 1; i < options.params.length; i++) {
-					url = fixKey(url, (String)options.param(i));
+					for (NameValuePair nvPair : pair) {
+						if (nvPair.getName().equals(options.param(i))){
+							pair.remove(nvPair);
+							break;
+						}
+					}
 				}
-				while(url.endsWith("&")){
-					url = url.substring(0, url.length()-1);
+				if (!pair.isEmpty()){
+					baseUrl += "?";
+					Iterator<NameValuePair> iter = pair.iterator();
+					NameValuePair nvPair = null;
+					while(iter.hasNext()){
+						nvPair = iter.next();
+						baseUrl += nvPair.getName() + "=" + nvPair.getValue();
+						if (iter.hasNext()){
+							baseUrl += "&";
+						}
+					}
 				}
-				return url;
+				return baseUrl;
+			}
+		});
+		registerHelper("contains", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String content = options.param(0);
+				for (int i = 1; i < options.params.length; i++) {
+					if (!content.contains(options.param(i).toString())){
+						return false;
+					}
+				}
+				return true;
+			}
+		});
+		registerHelper("containString", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				String content = (String) runtimeContext.get("_page_content");
+				for (int i = 1; i < options.params.length; i++) {
+					if (!content.contains(options.param(i).toString())){
+						return false;
+					}
+				}
+				return true;
+			}
+		});
+		registerHelper("containString", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				String content = (String) runtimeContext.get("_page_content");
+				for (int i = 1; i < options.params.length; i++) {
+					if (!content.contains(options.param(i).toString())){
+						return false;
+					}
+				}
+				return true;
 			}
 		});
 		
-	}
-	
-	private static String fixKey(String url,String key) {
-		String regex = key + "=[\\w]+(&|\\s*)";
-		url = url.replaceAll(regex, "");
-		return url;
 	}
 	
 }

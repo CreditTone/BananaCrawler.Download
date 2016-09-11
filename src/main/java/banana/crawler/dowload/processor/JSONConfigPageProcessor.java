@@ -3,6 +3,7 @@ package banana.crawler.dowload.processor;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -18,8 +19,8 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
 import banana.core.modle.CrawlData;
+import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
-import banana.core.protocol.Extractor;
 import banana.core.protocol.Task;
 import banana.core.protocol.Task.CrawlerData;
 import banana.core.protocol.Task.CrawlerRequest;
@@ -28,6 +29,7 @@ import banana.core.protocol.Task.Processor;
 import banana.core.request.HttpRequest;
 import banana.core.request.HttpRequest.Method;
 import banana.core.request.PageRequest;
+import banana.core.request.RequestBuilder;
 import banana.core.request.StartContext;
 import banana.core.response.Page;
 import banana.crawler.dowload.impl.DownloadServer;
@@ -151,13 +153,7 @@ public class JSONConfigPageProcessor implements PageProcessor {
 	@Override
 	public void process(Page page, StartContext context, List<HttpRequest> queue, List<CrawlData> objectContainer)
 			throws Exception {
-		Map<String,Object> pageContext = new HashMap<String,Object>();
-		pageContext.put("_current_url", page.getRequest().getUrl());
-		List<NameValuePair> pair = page.getRequest().getNameValuePairs();
-		for (NameValuePair pr : pair) {
-			pageContext.put(pr.getName(), pr.getValue());
-		}
-		RuntimeContext runtimeContext = new RuntimeContext(page.getRequest().getAttributes(), pageContext);
+		RuntimeContext runtimeContext = RuntimeContext.create(page.getRequest(), context);
 		if (direct != null){
 			String content = extractor.parseData(direct, page.getContent());
 			if (content == null)return;
@@ -175,7 +171,8 @@ public class JSONConfigPageProcessor implements PageProcessor {
 					return;
 				}
 				if (value.length() > 0){
-					pageContext.put(entry.getKey(), value);
+					runtimeContext.put(entry.getKey(), value);
+					logger.info(String.format("output page_context %s = %s", entry.getKey(),value));
 				}
 			}
 		}
@@ -199,7 +196,9 @@ public class JSONConfigPageProcessor implements PageProcessor {
 						copy(_data, json);
 						if (!dataCrawled(cite, json)){
 							if (cite.getSendRequest() != null){
-								sendRequestData.put(cite.getSendRequest(), json);
+								for (String sendTag : cite.getSendRequest()) {
+									sendRequestData.put(sendTag, json);
+								}
 							}else{
 								objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
 							}
@@ -217,7 +216,9 @@ public class JSONConfigPageProcessor implements PageProcessor {
 							}
 						}
 						if (cite.getSendRequest() != null){
-							sendRequestData.put(cite.getSendRequest(), filtedArray);
+							for (String sendTag : cite.getSendRequest()) {
+								sendRequestData.put(sendTag, filtedArray);
+							}
 						}else{
 							for (int j = 0; j < filtedArray.size(); j++) {
 								json = filtedArray.getJSONObject(j);
@@ -239,36 +240,37 @@ public class JSONConfigPageProcessor implements PageProcessor {
 					JSON requestData = sendRequestData.get(cite.getTag());
 					if (requestData != null){
 						if (requestData instanceof JSONObject) {
-							String url = runtimeContext.parse(urlDefine,(Map)requestData);
+							runtimeContext.setDataContext((Map)requestData);
+							String url = runtimeContext.parse(urlDefine);
 							JSONObject jsonObject = new JSONObject();
 							jsonObject.put("url", url);
-							req = convertRequest(context, cite, jsonObject);
+							req = createRequest(runtimeContext, cite, jsonObject);
 							if (req != null){
-								fixUrlAndFollowAttribute(currentPageReq, req);
 								req.addAttribute("_data", requestData);
 								queue.add(req);
 							}
+							runtimeContext.setDataContextNull();
 						}else if (requestData instanceof JSONArray) {
 							JSONArray requestDataArr = (JSONArray) requestData;
 							for (int j = 0; j < requestDataArr.size(); j++) {
-								String url = runtimeContext.parse(urlDefine,(Map)requestDataArr.get(j));
+								runtimeContext.setDataContext((Map)requestDataArr.get(j));
+								String url = runtimeContext.parse(urlDefine);
 								JSONObject jsonObject = new JSONObject();
 								jsonObject.put("url", url);
-								req = convertRequest(context, cite, jsonObject);
+								req = createRequest(runtimeContext, cite, jsonObject);
 								if (req != null){
-									fixUrlAndFollowAttribute(currentPageReq, req);
 									req.addAttribute("_data", requestDataArr.get(j));
 									queue.add(req);
 								}
+								runtimeContext.setDataContextNull();
 							}
 						}
 					}else{
 						String url = runtimeContext.parse(urlDefine);
 						JSONObject jsonObject = new JSONObject();
 						jsonObject.put("url", url);
-						req = convertRequest(context, cite, jsonObject);
+						req = createRequest(runtimeContext, cite, jsonObject);
 						if (req != null){
-							fixUrlAndFollowAttribute(currentPageReq, req);
 							queue.add(req);
 						}
 					}
@@ -280,9 +282,8 @@ public class JSONConfigPageProcessor implements PageProcessor {
 					if (responseJson.startsWith("{")){
 						JSONObject jsonObject = JSON.parseObject(responseJson);
 						dataFollowYingYong(runtimeContext, cite, jsonObject);
-						req = convertRequest(context, cite, jsonObject);
+						req = createRequest(runtimeContext, cite, jsonObject);
 						if (req != null){
-							fixUrlAndFollowAttribute(currentPageReq, req);
 							queue.add(req);
 						}
 					}else if(responseJson.startsWith("[")){
@@ -290,9 +291,8 @@ public class JSONConfigPageProcessor implements PageProcessor {
 						for (int j = 0; j < jsonArray.size(); j++) {
 							JSONObject jsonObject = jsonArray.getJSONObject(j);
 							dataFollowYingYong(runtimeContext, cite, jsonObject);
-							req = convertRequest(context, cite, jsonObject);
+							req = createRequest(runtimeContext, cite, jsonObject);
 							if (req != null){
-								fixUrlAndFollowAttribute(currentPageReq, req);
 								queue.add(req);
 							}
 						}
@@ -328,32 +328,12 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		}
 	}
 	
-	private void fixUrlAndFollowAttribute(PageRequest currentPageReq,PageRequest newReq){
-		for (String key : currentPageReq.enumAttributeNames()) {
-			newReq.addAttribute(key, currentPageReq.getAttribute(key));
-		}
-		if (newReq.getUrl().startsWith("http"))
-			return;
-		if (newReq.getUrl().startsWith("?")){
-			String baseUrl = currentPageReq.getUrl().split("\\?", 2)[0];
-			newReq.setUrl(baseUrl + newReq.getUrl());
-		}else if (newReq.getUrl().startsWith("//")){
-			newReq.setUrl("https:" + newReq.getUrl());
-		}else if(newReq.getUrl().startsWith("/")){
-			int index = currentPageReq.getUrl().indexOf("/",7);
-			String baseUrl = currentPageReq.getUrl().substring(0, index);
-			newReq.setUrl(baseUrl + newReq.getUrl());
-		}else{
-			newReq.setUrl(currentPageReq.getUrl() + newReq.getUrl());
-		}
-	}
-	
-	private PageRequest convertRequest(StartContext context,CrawlerRequest config,JSONObject jsonObject){
+	private PageRequest createRequest(RuntimeContext runtimeContext,CrawlerRequest config,JSONObject jsonObject) throws IOException{
 		if (jsonObject.getString("url") == null){
 			return null;
 		}
 		String processor = (String) config.get("processor");
-		PageRequest req = context.createPageRequest(jsonObject.getString("url"), processor);
+		PageRequest req = RequestBuilder.createPageRequest(jsonObject.getString("url"), processor);
 		if (jsonObject.containsKey("attribute")){
 			Map<String,Object> attribute = (Map<String, Object>) jsonObject.get("attribute");
 			for (Entry<String, Object> pair:attribute.entrySet()) {
@@ -371,13 +351,15 @@ public class JSONConfigPageProcessor implements PageProcessor {
 		if (config.containsKey("headers")){
 			Map<String,String> headers = (Map<String, String>) config.get("headers");
 			for(Entry<String, String> pair:headers.entrySet()){
-				req.putHeader(pair.getKey(), (String) pair.getValue());
+				String value = pair.getValue();
+				req.putHeader(pair.getKey(), runtimeContext.parse(value));
 			}
 		}
 		if (config.containsKey("params")){
 			Map<String,String> params = (Map<String, String>) config.get("params");
 			for(Entry<String, String> pair:params.entrySet()){
-				req.putParams(pair.getKey(), (String) pair.getValue());
+				String value = pair.getValue();
+				req.putParams(pair.getKey(), runtimeContext.parse(value));
 			}
 		}
 		if (config.containsKey("priority")){

@@ -14,7 +14,7 @@ import org.apache.log4j.Logger;
 
 import com.googlecode.jsonrpc4j.JsonRpcClient;
 
-import banana.core.protocol.Extractor;
+import banana.core.processor.Extractor;
 
 public class JsonRpcExtractor implements Extractor {
 	
