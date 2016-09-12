@@ -105,13 +105,13 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			return pageProcessors.get(processor);
 		}
 		for (Task.ProcessorForwarder forwarderConfig : config.forwarders) {
-			if (processor.equals(forwarderConfig.getIndex())){
+			if (processor.equals(forwarderConfig.index)){
 				return new ProcessorForwarder(taskId, forwarderConfig, this);
 			}
 		}
 		for (Task.Processor processorConfig : config.processors) {
-			if (processor.equals(processorConfig.getIndex())){
-				return new JSONConfigPageProcessor(taskId, processorConfig, DownloadServer.getInstance().extractor);
+			if (processor.equals(processorConfig.index)){
+				return new JSONConfigPageProcessor(taskId, processorConfig);
 			}
 		}
 		return null;

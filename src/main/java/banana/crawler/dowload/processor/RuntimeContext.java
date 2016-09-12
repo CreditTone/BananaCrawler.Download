@@ -13,10 +13,12 @@ import org.apache.http.NameValuePair;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
 
+import banana.core.modle.ContextModle;
 import banana.core.request.HttpRequest;
 import banana.core.request.StartContext;
+import banana.core.response.Page;
 
-public final class RuntimeContext implements Map<String, Object> {
+public final class RuntimeContext implements ContextModle {
 
 	private static final Handlebars handlebars = new ExpandHandlebars();
 
@@ -26,14 +28,16 @@ public final class RuntimeContext implements Map<String, Object> {
 	
 	private Map<String, Object> dataContext;
 	
-	public static final RuntimeContext create(HttpRequest request,StartContext context){
+	public static final RuntimeContext create(Page page,StartContext context){
+		HttpRequest request = page.getRequest();
 		Map<String,Object> pageContext = new HashMap<String,Object>();
-		pageContext.put("_current_url", request.getUrl());
+		pageContext.put("_url", request.getUrl());
 		List<NameValuePair> pair = request.getNameValuePairs();
 		for (NameValuePair pr : pair) {
 			pageContext.put(pr.getName(), pr.getValue());
 		}
 		RuntimeContext runtimeContext = new RuntimeContext(request.getAttributes(), pageContext);
+		runtimeContext.put("_content", page.getContent());
 		return runtimeContext;
 	}
 
