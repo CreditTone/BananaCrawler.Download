@@ -1,17 +1,19 @@
 package banana.crawler.dowload.processor;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 import org.apache.http.NameValuePair;
-import org.apache.http.client.utils.URLEncodedUtils;
 
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
+
+import banana.core.util.URLEncodedUtils;
 
 public class ExpandHandlebars extends Handlebars {
 
@@ -93,7 +95,7 @@ public class ExpandHandlebars extends Handlebars {
 				String[] urlData  = url.split("\\?");
 				String baseUrl = urlData[0];
 				String querys  = urlData[1];
-				List<NameValuePair> pair = URLEncodedUtils.parse(querys, Charset.defaultCharset());
+				List<NameValuePair> pair = URLEncodedUtils.parse(querys);
 				for (int i = 1; i < options.params.length; i++) {
 					for (NameValuePair nvPair : pair) {
 						if (nvPair.getName().equals(options.param(i))){

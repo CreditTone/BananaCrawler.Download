@@ -29,7 +29,7 @@ public class StartDownloader {
 		HelpFormatter formatter = new HelpFormatter();
 		if(commandLine.hasOption('h') ) {
 		    formatter.printHelp("Downloader", options);
-		    System.exit(0);  
+		    System.exit(0);
 		}
 		String master = "localhost";
 		if(commandLine.hasOption('m')) {

@@ -50,8 +50,12 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 	private ExtractorParseConfig[] requestParser;
 	
-	public JSONConfigPageProcessor(String taskId,Processor config) {
-		super(taskId, config, DownloadServer.getInstance().extractor);
+	public JSONConfigPageProcessor(String taskId,Processor config){
+		this(taskId, config, DownloadServer.getInstance().extractor);
+	}
+	
+	public JSONConfigPageProcessor(String taskId,Processor config,Extractor extractor) {
+		super(taskId, config, extractor);
 		this.config = config;
 		if (config.crawler_data != null) {
 			this.dataParser = new ExtractorParseConfig[config.crawler_data.length];
@@ -103,6 +107,8 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			}
 		}
 	}
+	
+	
 	
 
 	@Override
