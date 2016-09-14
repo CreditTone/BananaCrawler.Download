@@ -40,7 +40,9 @@ public class JsonRpcExtractor implements Extractor {
 	        String params = config + "######" + body;
 			reply = client.invokeAndReadResponse("Extractor.RpcParse", new Object[]{params}, String.class, ops, ips);
 		}catch(Throwable e){
-			logger.warn(String.format("parse error %s", config), e);
+			if (!(e instanceof ClassCastException)){
+				logger.warn(String.format("parse error %s", config), e);
+			}
 		}finally{
 			if (socket != null){
 				try {

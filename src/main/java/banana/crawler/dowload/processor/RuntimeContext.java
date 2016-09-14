@@ -11,8 +11,11 @@ import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.http.NameValuePair;
 
 import com.github.jknack.handlebars.Handlebars;
+import com.github.jknack.handlebars.Helper;
+import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.Template;
 
+import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
 import banana.core.request.HttpRequest;
 import banana.core.request.StartContext;
@@ -21,6 +24,30 @@ import banana.core.response.Page;
 public final class RuntimeContext implements ContextModle {
 
 	private static final Handlebars handlebars = new ExpandHandlebars();
+	
+	static{
+		handlebars.registerHelper("existKey", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String key = options.param(0);
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				return runtimeContext.containsKey(key);
+			}
+		});
+		handlebars.registerHelper("containString", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				String content = (String) runtimeContext.get("_content");
+				for (int i = 1; i < options.params.length; i++) {
+					if (!content.contains(options.param(i).toString())){
+						return false;
+					}
+				}
+				return true;
+			}
+		});
+	}
 
 	private Map<String, Object> requestAttribute;
 
