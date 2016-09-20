@@ -88,7 +88,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 						writeTemplates(result, runtimeContext, dataExtractorConfig.templates);
 						copy(_data, result);
 						if (dataExtractorConfig.unique != null){
-							result = (JSONObject) filter(result, dataExtractorConfig.unique);
+							result = filter(result, dataExtractorConfig.unique);
 						}
 						if (result != null){
 							writeObject(objectContainer, page.getRequest().getUrl(), result);
@@ -102,8 +102,6 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			for (int i = 0; i < requestParser.length; i++) {
 				RequestExtractorConfig requestExtractorConfig = requestParser[i];
 				if (requestExtractorConfig.dataContext != null){
-					if (!runtimeContext.containsKey(requestExtractorConfig.dataContext.key))
-						continue;
 					JSON contextData = (JSON) runtimeContext.get(requestExtractorConfig.dataContext.key);
 					if (contextData != null){
 						if (contextData instanceof JSONObject) {
