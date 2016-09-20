@@ -1,18 +1,13 @@
 package banana.crawler.dowload.processor;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.http.NameValuePair;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
-
-import java.util.Set;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
@@ -20,18 +15,15 @@ import com.alibaba.fastjson.JSONObject;
 
 import banana.core.modle.CrawlData;
 import banana.core.processor.Extractor;
-import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task;
-import banana.core.protocol.Task.CrawlerData;
-import banana.core.protocol.Task.CrawlerRequest;
-import banana.core.protocol.Task.ExpandableHashMap;
 import banana.core.protocol.Task.Processor;
 import banana.core.request.HttpRequest;
-import banana.core.request.HttpRequest.Method;
 import banana.core.request.PageRequest;
 import banana.core.request.RequestBuilder;
 import banana.core.request.StartContext;
 import banana.core.response.Page;
+import banana.crawler.dowload.config.DataExtractorConfig;
+import banana.crawler.dowload.config.RequestExtractorConfig;
 import banana.crawler.dowload.impl.DownloadServer;
 
 public class JSONConfigPageProcessor extends BasicPageProcessor {
@@ -46,9 +38,9 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 	private Task.Processor config;
 	
-	private ExtractorParseConfig[] dataParser;
+	private DataExtractorConfig[] dataParser;
 	
-	private ExtractorParseConfig[] requestParser;
+	private RequestExtractorConfig[] requestParser;
 	
 	public JSONConfigPageProcessor(String taskId,Processor config){
 		this(taskId, config, DownloadServer.getInstance().extractor);
@@ -58,52 +50,15 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		super(taskId, config, extractor);
 		this.config = config;
 		if (config.crawler_data != null) {
-			this.dataParser = new ExtractorParseConfig[config.crawler_data.length];
-			HashMap<String,Object> dataParseConfig = new HashMap<String,Object>();
+			dataParser = new DataExtractorConfig[config.crawler_data.length];
 			for (int i = 0 ;i < config.crawler_data.length ;i++) {
-				ExpandableHashMap item = config.crawler_data[i];
-				ExtractorParseConfig epc = new ExtractorParseConfig();
-				Set<String> keys = item.keySet();
-				for (String key : keys) {
-					if (key.equals("_condition")){
-						epc.condition = (String) item.get("_condition");
-					}else{
-						dataParseConfig.put(key, config.crawler_data[i].get(key));
-					}
-				}
-				epc.body = JSON.toJSONString(dataParseConfig);
-				dataParser[i] = epc;
-				dataParseConfig.clear();
+				dataParser[i] = new DataExtractorConfig(config.crawler_data[i]);
 			}
 		}
 		if (config.crawler_request != null){
-			this.requestParser = new ExtractorParseConfig[config.crawler_request.length];
-			HashMap<String,Object> urlParseConfig = new HashMap<String,Object>();
+			requestParser = new RequestExtractorConfig[config.crawler_request.length];
 			for (int i = 0 ;i < config.crawler_request.length ;i++) {
-				ExpandableHashMap item = config.crawler_request[i];
-				ExtractorParseConfig epc = new ExtractorParseConfig();
-				if (item.containsKey("_condition")){
-					epc.condition = (String) item.get("_condition");
-				}
-				String urlXpath = (String) item.get("url");
-				if (urlXpath != null){
-					urlParseConfig.put("url",urlXpath);
-				}
-				if (item.containsKey("attribute")){
-					Object attributeDefine = item.get("attribute");
-					urlParseConfig.put("attribute",attributeDefine);
-				}
-				if (item.containsKey("_root")){
-					Object _root = item.get("_root");
-					urlParseConfig.put("_root", _root);
-				}
-				if (item.containsKey("_type")){
-					Object _type = item.get("_type");
-					urlParseConfig.put("_type", _type);
-				}
-				epc.body = JSON.toJSONString(urlParseConfig);
-				requestParser[i] = epc;
-				urlParseConfig.clear();
+				requestParser[i] = new RequestExtractorConfig(config.crawler_request[i]);
 			}
 		}
 	}
@@ -117,53 +72,26 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		if (runtimeContext == null){
 			return null;
 		}
-		Map<String,JSON> sendRequestData = new HashMap<String,JSON>();
 		String responseJson = null;
 		PageRequest currentPageReq = (PageRequest) page.getRequest();
 		if (dataParser != null){
 			for (int i = 0; i < dataParser.length; i++) {
-				ExtractorParseConfig epc = dataParser[i];
-				CrawlerData cite = config.crawler_data[i];
+				DataExtractorConfig dataExtractorConfig = dataParser[i];
 				JSONObject _data = (JSONObject) currentPageReq.getAttribute("_data");
-				if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
-					responseJson = extractor.parseData(epc.body, page.getContent());
+				if (dataExtractorConfig.condition == null || runtimeContext.parse(dataExtractorConfig.condition).equals("true")){
+					responseJson = extractor.parseData(dataExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
 						continue;
 					}
-					if (responseJson.startsWith("{")){
-						JSONObject json = JSON.parseObject(responseJson);
-						dataFollowYingYong(runtimeContext, cite, json);
-						copy(_data, json);
-						if (!dataCrawled(cite, json)){
-							if (cite.getSendRequest() != null){
-								for (String sendTag : cite.getSendRequest()) {
-									sendRequestData.put(sendTag, json);
-								}
-							}else{
-								objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
-							}
+					if (responseJson.startsWith("{") || responseJson.startsWith("[")){
+						JSON result = (JSON) JSON.parse(responseJson);
+						writeTemplates(result, runtimeContext, dataExtractorConfig.templates);
+						copy(_data, result);
+						if (dataExtractorConfig.unique != null){
+							result = (JSONObject) filter(result, dataExtractorConfig.unique);
 						}
-					}else if(responseJson.startsWith("[")){
-						JSONArray jsonArray = JSON.parseArray(responseJson);
-						JSONArray filtedArray = new JSONArray();
-						JSONObject json = null;
-						for (int j = 0; j < jsonArray.size(); j++) {
-							json = jsonArray.getJSONObject(j);
-							dataFollowYingYong(runtimeContext, cite, json);
-							copy(_data, json);
-							if (!dataCrawled(cite, json)){
-								filtedArray.add(json);
-							}
-						}
-						if (cite.getSendRequest() != null){
-							for (String sendTag : cite.getSendRequest()) {
-								sendRequestData.put(sendTag, filtedArray);
-							}
-						}else{
-							for (int j = 0; j < filtedArray.size(); j++) {
-								json = filtedArray.getJSONObject(j);
-								objectContainer.add(new CrawlData(taskId, page.getRequest().getUrl(), json.toJSONString()));
-							}
+						if (result != null){
+							writeObject(objectContainer, page.getRequest().getUrl(), result);
 						}
 					}
 				}
@@ -171,69 +99,55 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		}
 		
 		if (requestParser != null){
-			PageRequest req = null;
 			for (int i = 0; i < requestParser.length; i++) {
-				ExtractorParseConfig epc = requestParser[i];
-				CrawlerRequest cite = config.crawler_request[i];
-				if (cite.getTag() != null && sendRequestData.containsKey(cite.getTag())){
-					String urlDefine = (String) cite.getCite().get("url");
-					JSON requestData = sendRequestData.get(cite.getTag());
-					if (requestData != null){
-						if (requestData instanceof JSONObject) {
-							runtimeContext.setDataContext((Map)requestData);
-							String url = runtimeContext.parse(urlDefine);
-							JSONObject jsonObject = new JSONObject();
-							jsonObject.put("url", url);
-							req = createRequest(runtimeContext, cite, jsonObject);
-							if (req != null){
-								req.addAttribute("_data", requestData);
-								queue.add(req);
-							}
-							runtimeContext.setDataContextNull();
-						}else if (requestData instanceof JSONArray) {
-							JSONArray requestDataArr = (JSONArray) requestData;
+				RequestExtractorConfig requestExtractorConfig = requestParser[i];
+				if (requestExtractorConfig.dataContext != null){
+					if (!runtimeContext.containsKey(requestExtractorConfig.dataContext.key))
+						continue;
+					JSON contextData = (JSON) runtimeContext.get(requestExtractorConfig.dataContext.key);
+					if (contextData != null){
+						if (contextData instanceof JSONObject) {
+							JSONArray temp = new JSONArray();
+							temp.add(contextData);
+							contextData = temp;
+						}
+						if (contextData instanceof JSONArray) {
+							JSONArray requestDataArr = (JSONArray) contextData;
 							for (int j = 0; j < requestDataArr.size(); j++) {
 								runtimeContext.setDataContext((Map)requestDataArr.get(j));
-								String url = runtimeContext.parse(urlDefine);
 								JSONObject jsonObject = new JSONObject();
-								jsonObject.put("url", url);
-								req = createRequest(runtimeContext, cite, jsonObject);
-								if (req != null){
-									req.addAttribute("_data", requestDataArr.get(j));
-									queue.add(req);
+								writeTemplates(jsonObject, runtimeContext, requestExtractorConfig.templates);
+								if (requestExtractorConfig.unique != null){
+									jsonObject = (JSONObject) filter(jsonObject, requestExtractorConfig.unique);
+								}
+								if (jsonObject != null){
+									PageRequest req = createRequest(runtimeContext, requestExtractorConfig, jsonObject).get(0);
+									if (req != null){
+										if (requestExtractorConfig.dataContext.data_flow){
+											req.addAttribute("_data", requestDataArr.get(j));
+										}
+										queue.add(req);
+									}
 								}
 								runtimeContext.setDataContextNull();
 							}
 						}
-					}else{
-						String url = runtimeContext.parse(urlDefine);
-						JSONObject jsonObject = new JSONObject();
-						jsonObject.put("url", url);
-						req = createRequest(runtimeContext, cite, jsonObject);
-						if (req != null){
-							queue.add(req);
-						}
 					}
-				}else if (epc.condition == null || runtimeContext.parse(epc.condition).equals("true")){
-					responseJson = extractor.parseData(epc.body, page.getContent());
+				}else if (requestExtractorConfig.condition == null || runtimeContext.parse(requestExtractorConfig.condition).equals("true")){
+					responseJson = extractor.parseData(requestExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
 						continue;
 					}
-					if (responseJson.startsWith("{")){
-						JSONObject jsonObject = JSON.parseObject(responseJson);
-						dataFollowYingYong(runtimeContext, cite, jsonObject);
-						req = createRequest(runtimeContext, cite, jsonObject);
-						if (req != null){
-							queue.add(req);
+					if (responseJson.startsWith("{") || responseJson.startsWith("[")){
+						JSON data = (JSON) JSON.parse(responseJson);
+						writeTemplates(data, runtimeContext, requestExtractorConfig.templates);
+						if (requestExtractorConfig.unique != null){
+							data = filter(data, requestExtractorConfig.unique);
 						}
-					}else if(responseJson.startsWith("[")){
-						JSONArray jsonArray = JSON.parseArray(responseJson);
-						for (int j = 0; j < jsonArray.size(); j++) {
-							JSONObject jsonObject = jsonArray.getJSONObject(j);
-							dataFollowYingYong(runtimeContext, cite, jsonObject);
-							req = createRequest(runtimeContext, cite, jsonObject);
-							if (req != null){
-								queue.add(req);
+						if (data != null){
+							List<PageRequest> resps = createRequest(runtimeContext, requestExtractorConfig, data);
+							if (resps != null){
+								queue.addAll(resps);
 							}
 						}
 					}
@@ -243,89 +157,80 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		return runtimeContext;
 	}
 	
-	private final boolean dataCrawled(ExpandableHashMap config,JSONObject jsonObject){
-		if (config.getUnique() == null || MODE == TEST_MODE){
-			return false;
-		}
-		String[] fields = new String[config.getUnique().size()];
-		for (int i = 0; i < fields.length; i++) {
-			fields[i] = jsonObject.getString(config.getUnique(i));
-		}
-		boolean exists = DownloadServer.getInstance().getMasterServer().filterQuery(taskId, fields).get();
-		return exists;
-	}
-	
-	private final void dataFollowYingYong(RuntimeContext runtimeContext,ExpandableHashMap config,JSONObject data) throws IOException{
-		if (config.getCite().isEmpty()){
-			return;
-		}
-		for (Entry<String,Object> pair : config.getCite().entrySet()) {
-			String valueCite = pair.getValue().toString();
-			String result = runtimeContext.parse(valueCite);
-			if (!result.isEmpty()){
-				data.put(pair.getKey(), result);
-				continue;
+	private void writeObject(List<CrawlData> objectContainer, String url, JSON data){
+		if (data instanceof JSONArray){
+			JSONArray dataArr  = (JSONArray) data;
+			for (int i = 0; i < dataArr.size(); i++) {
+				objectContainer.add(new CrawlData(taskId, url, dataArr.getJSONObject(i).toJSONString()));
 			}
+		}else{
+			objectContainer.add(new CrawlData(taskId, url, data.toJSONString()));
 		}
 	}
 	
-	private PageRequest createRequest(RuntimeContext runtimeContext,CrawlerRequest config,JSONObject jsonObject) throws IOException{
-		if (jsonObject.getString("url") == null){
-			return null;
-		}
-		String processor = (String) config.get("processor");
-		PageRequest req = RequestBuilder.createPageRequest(jsonObject.getString("url"), processor);
-		if (jsonObject.containsKey("attribute")){
-			Map<String,Object> attribute = (Map<String, Object>) jsonObject.get("attribute");
-			for (Entry<String, Object> pair:attribute.entrySet()) {
-				String value = (String) pair.getValue();
-				if (value == null || (value = value.trim()).isEmpty()){
-					logger.warn(String.format("extractor attr error %s",req.getUrl()));
-					return null;
+	private List<PageRequest> createRequest(RuntimeContext runtimeContext,RequestExtractorConfig requestExtractorConfig,JSON data) throws IOException{
+		if (data instanceof JSONObject){
+			JSONObject dataObj = (JSONObject) data;
+			if (dataObj.getString("url") == null){
+				return null;
+			}
+			PageRequest req = RequestBuilder.createPageRequest(dataObj.getString("url"), requestExtractorConfig.processor);
+			if (dataObj.containsKey("attribute")){
+				Map<String,Object> attribute = (Map<String, Object>) dataObj.get("attribute");
+				for (Entry<String, Object> pair:attribute.entrySet()) {
+					String value = (String) pair.getValue();
+					if (value == null || (value = value.trim()).isEmpty()){
+						logger.warn(String.format("extractor attr error %s",req.getUrl()));
+						return null;
+					}
+					req.addAttribute(pair.getKey(), pair.getValue());
 				}
-				req.addAttribute(pair.getKey(), pair.getValue());
 			}
-		}
-		if (config.containsKey("method") && "POST".equalsIgnoreCase((String) config.get("method"))){
-			req.setMethod(Method.POST);
-		}
-		if (config.containsKey("headers")){
-			Map<String,String> headers = (Map<String, String>) config.get("headers");
-			for(Entry<String, String> pair:headers.entrySet()){
-				String value = pair.getValue();
-				req.putHeader(pair.getKey(), runtimeContext.parse(value));
+			req.setMethod(requestExtractorConfig.method);
+			if (requestExtractorConfig.headers != null){
+				for(Entry<String, String> pair : requestExtractorConfig.headers.entrySet()){
+					String value = pair.getValue();
+					req.putHeader(pair.getKey(), runtimeContext.parse(value));
+				}
 			}
-		}
-		if (config.containsKey("params")){
-			Map<String,String> params = (Map<String, String>) config.get("params");
-			for(Entry<String, String> pair:params.entrySet()){
-				String value = pair.getValue();
-				req.putParams(pair.getKey(), runtimeContext.parse(value));
+			if (requestExtractorConfig.params != null){
+				for(Entry<String, String> pair : requestExtractorConfig.params.entrySet()){
+					String value = pair.getValue();
+					req.putParams(pair.getKey(), runtimeContext.parse(value));
+				}
 			}
+			req.setPriority(requestExtractorConfig.priority);
+			return Arrays.asList(req);
+		}else{
+			List<PageRequest> reqs = new ArrayList<PageRequest>();
+			JSONArray dataArr = (JSONArray) data;
+			for (int i = 0; i < dataArr.size(); i++) {
+				List<PageRequest> oneReq = createRequest(runtimeContext, requestExtractorConfig, dataArr.getJSONObject(i));
+				if (oneReq != null){
+					reqs.add(oneReq.get(0));
+				}
+			}
+			return reqs;
 		}
-		if (config.containsKey("priority")){
-			req.setPriority((int) config.get("priority"));
-		}
-		return req;
 	}
 	
-	private final static void copy(JSONObject from,JSONObject to){
+	private final static void copy(JSONObject from,JSON to){
 		if (from != null){
-			for (Entry<String,Object> entry : from.entrySet()) {
-				if (to.containsKey(entry.getKey())){
-					continue;
+			if (to instanceof JSONObject){
+				JSONObject dest = (JSONObject) to;
+				for (Entry<String,Object> entry : from.entrySet()) {
+					if (dest.containsKey(entry.getKey())){
+						continue;
+					}
+					dest.put(entry.getKey(), entry.getValue());
 				}
-				to.put(entry.getKey(), entry.getValue());
+			}else{
+				JSONArray destArr = (JSONArray) to;
+				for (int i = 0; i < destArr.size(); i++) {
+					copy(from, destArr.getJSONObject(i));
+				}
 			}
 		}
 	}
 	
-	private final class ExtractorParseConfig{
-		
-		public String condition;
-		
-		public String body;
-		
-	}
-
 }
