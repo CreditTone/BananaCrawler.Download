@@ -3,6 +3,7 @@ package banana.crawler.dowload.processor;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -12,6 +13,8 @@ import org.apache.log4j.Logger;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 
 import banana.core.modle.CrawlData;
 import banana.core.processor.Extractor;
@@ -24,6 +27,7 @@ import banana.core.request.StartContext;
 import banana.core.response.Page;
 import banana.crawler.dowload.config.DataExtractorConfig;
 import banana.crawler.dowload.config.RequestExtractorConfig;
+import banana.crawler.dowload.config.DataExtractorConfig.Update;
 import banana.crawler.dowload.impl.DownloadServer;
 
 public class JSONConfigPageProcessor extends BasicPageProcessor {
@@ -91,7 +95,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 							result = filter(result, dataExtractorConfig.unique);
 						}
 						if (result != null){
-							writeObject(objectContainer, page.getRequest().getUrl(), result);
+							writeObject(runtimeContext, objectContainer, page.getRequest().getUrl(), result, dataExtractorConfig.update);
 						}
 					}
 				}
@@ -155,14 +159,28 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		return runtimeContext;
 	}
 	
-	private void writeObject(List<CrawlData> objectContainer, String url, JSON data){
+	private DBObject buildUpdateQuery(Update update,RuntimeContext runtimeContext) throws IOException{
+		if (update == null){
+			return null;
+		}
+		BasicDBObject dbObject = new BasicDBObject(update.index, runtimeContext.parse(update.value));
+		return dbObject;
+	}
+	
+	private void writeObject(RuntimeContext runtimeContext,List<CrawlData> objectContainer, String url, JSON data,Update update) throws IOException{
+		DBObject body = null;
+		DBObject updateQuery = null;
 		if (data instanceof JSONArray){
 			JSONArray dataArr  = (JSONArray) data;
 			for (int i = 0; i < dataArr.size(); i++) {
-				objectContainer.add(new CrawlData(taskId, url, dataArr.getJSONObject(i).toJSONString()));
+				body = new BasicDBObject(dataArr.getJSONObject(i));
+				updateQuery = buildUpdateQuery(update, runtimeContext);
+				objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
 			}
 		}else{
-			objectContainer.add(new CrawlData(taskId, url, data.toJSONString()));
+			body = new BasicDBObject((Map<String, Object>) data);
+			updateQuery = buildUpdateQuery(update, runtimeContext);
+			objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
 		}
 	}
 	

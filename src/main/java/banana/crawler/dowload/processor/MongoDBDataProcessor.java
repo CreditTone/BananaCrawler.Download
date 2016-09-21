@@ -9,6 +9,7 @@ import java.util.Set;
 
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
+import com.mongodb.DBCollection;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoCredential;
@@ -53,18 +54,23 @@ public class MongoDBDataProcessor implements DataProcessor {
 
 	@Override
 	public void process(List<CrawlData> objectContainer,String ... collection) {
-		for (CrawlData data : objectContainer) {
-			if (!collections.contains(collection[0])){
-				if (!db.collectionExists(collection[0])){
-					synchronized (data) {
-						if (!db.collectionExists(collection[0])){
-							db.getCollection(collection[0]).createIndex("_task_name");
-						}
+		if (!collections.contains(collection[0])){
+			if (!db.collectionExists(collection[0])){
+				synchronized (this) {
+					if (!db.collectionExists(collection[0])){
+						db.getCollection(collection[0]).createIndex("_task_name");
 					}
 				}
-				collections.add(collection[0]);
 			}
-			db.getCollection(collection[0]).insert(data.getData());
+			collections.add(collection[0]);
+		}
+		DBCollection dbCollection = db.getCollection(collection[0]);
+		for (CrawlData data : objectContainer) {
+			if (data.isUpdate()){
+				dbCollection.update(data.getUpdateQuery(), data.getData());
+			}else{
+				dbCollection.insert(data.getData());
+			}
 		}
 	}
 	

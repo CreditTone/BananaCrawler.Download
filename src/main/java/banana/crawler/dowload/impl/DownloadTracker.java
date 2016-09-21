@@ -160,7 +160,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	
 	protected void handleResult(List<HttpRequest> newRequests, List<CrawlData> objectContainer) {
-		//跟进URL加入队列
 		try {
 			CrawlerMasterProtocol master = DownloadServer.getInstance().getMasterServer();
 			for (HttpRequest req : newRequests) {
