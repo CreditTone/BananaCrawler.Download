@@ -82,6 +82,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				return false;
 			}
 			Page page = defaultPageDownloader.download(pageRequest);
+			if (page == null){
+				return false;
+			}
 			if (pageRequest.getMethod() == HttpRequest.Method.POST){
 				logger.info(String.format("%s Post:%s StatusCode:%s", pageRequest.getUrl(), pageRequest.getParams(), page.getStatus()));
 			}else{
@@ -206,7 +209,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		logger.info("DownloadTracker thread = " + downloadThreadPool.getThreadNum());
 		runing = true;
 		defaultPageDownloader.open();//打开下载器
-		BasicRequest request = null;
+		HttpRequest request = null;
 		while(runing){
 			try{
 				request = pollRequest();

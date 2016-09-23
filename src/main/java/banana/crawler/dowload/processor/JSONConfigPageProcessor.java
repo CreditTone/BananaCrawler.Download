@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 
@@ -27,7 +29,6 @@ import banana.core.request.StartContext;
 import banana.core.response.Page;
 import banana.crawler.dowload.config.DataExtractorConfig;
 import banana.crawler.dowload.config.RequestExtractorConfig;
-import banana.crawler.dowload.config.DataExtractorConfig.Update;
 import banana.crawler.dowload.impl.DownloadServer;
 
 public class JSONConfigPageProcessor extends BasicPageProcessor {
@@ -66,8 +67,6 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			}
 		}
 	}
-	
-	
 	
 
 	@Override
@@ -159,29 +158,45 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		return runtimeContext;
 	}
 	
-	private DBObject buildUpdateQuery(Update update,RuntimeContext runtimeContext) throws IOException{
-		if (update == null){
+	private DBObject buildUpdateQuery(Map<String,String> update,RuntimeContext runtimeContext) throws IOException{
+		if (update == null || update.isEmpty()){
 			return null;
 		}
-		BasicDBObject dbObject = new BasicDBObject(update.index, runtimeContext.parse(update.value));
+		BasicDBObject dbObject = new BasicDBObject();
+		for (Entry<String,String> entry : update.entrySet()) {
+			dbObject.put(entry.getKey(), runtimeContext.parse(entry.getValue()));
+		}
 		return dbObject;
 	}
 	
-	private void writeObject(RuntimeContext runtimeContext,List<CrawlData> objectContainer, String url, JSON data,Update update) throws IOException{
+	private void writeObject(RuntimeContext runtimeContext,List<CrawlData> objectContainer, String url, JSON data,Map<String,String> update) throws IOException{
 		DBObject body = null;
 		DBObject updateQuery = null;
 		if (data instanceof JSONArray){
 			JSONArray dataArr  = (JSONArray) data;
 			for (int i = 0; i < dataArr.size(); i++) {
-				body = new BasicDBObject(dataArr.getJSONObject(i));
+				Map<String,Object> map = fixData(dataArr.getJSONObject(i));
+				body = new BasicDBObject(map);
 				updateQuery = buildUpdateQuery(update, runtimeContext);
 				objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
 			}
 		}else{
-			body = new BasicDBObject((Map<String, Object>) data);
+			Map<String, Object> map = fixData((JSONObject) data);
+			body = new BasicDBObject(map);
 			updateQuery = buildUpdateQuery(update, runtimeContext);
 			objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
 		}
+	}
+
+	private final Map<String, Object> fixData(JSONObject data) {
+		Map<String,Object> map = (Map<String, Object>) data;
+		Set<String> keySet = new HashSet<String>(map.keySet());
+		for (String key : keySet) {
+			if (map.get(key) == null){
+				map.remove(key);
+			}
+		}
+		return map;
 	}
 	
 	private List<PageRequest> createRequest(RuntimeContext runtimeContext,RequestExtractorConfig requestExtractorConfig,JSON data) throws IOException{

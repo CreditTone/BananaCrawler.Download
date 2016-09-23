@@ -23,7 +23,7 @@ import banana.crawler.dowload.config.DataExtractorConfig;
 import banana.crawler.dowload.impl.DownloadServer;
 
 public class BasicPageProcessor implements PageProcessor {
-	
+
 	private static Logger logger = Logger.getLogger(BasicPageProcessor.class);
 
 	protected String taskId;
@@ -71,14 +71,14 @@ public class BasicPageProcessor implements PageProcessor {
 		RuntimeContext runtimeContext = RuntimeContext.create(page, context);
 		if (direct != null) {
 			String content = extractor.parseData(direct, page.getContent());
-			if (content == null){
+			if (content == null) {
 				logger.warn(String.format("content prepare error %s", direct));
 				return null;
 			}
 			page.setContent(content);
 		} else if (define != null) {
 			String content = extractor.parseData(define, page.getContent());
-			if (content == null){
+			if (content == null) {
 				logger.warn(String.format("content prepare parse error %s", define));
 				return null;
 			}
@@ -90,42 +90,41 @@ public class BasicPageProcessor implements PageProcessor {
 				DataExtractorConfig dataExtratorConfig = entry.getValue();
 				String value = extractor.parseData(dataExtratorConfig.parseConfig, page.getContent());
 				if (value == null) {
-					logger.warn(String.format("page context parse error %s", dataExtratorConfig.parseConfig));
+					logger.warn(String.format("page context parse error %s %s", dataExtratorConfig.parseConfig, page.getRequest().getUrl()));
 					continue;
 				}
-				if (value.length() > 0) {
-					if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))){
-						JSON jsonValue = (JSON) JSON.parse(value);
-						writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
-						if (dataExtratorConfig.unique != null){
-							jsonValue = filter(jsonValue, dataExtratorConfig.unique);
-						}
-						if (jsonValue != null){
-							runtimeContext.put(entry.getKey(), jsonValue);
-						}
-					}else{
-						runtimeContext.put(entry.getKey(), value);
+				if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+					JSON jsonValue = (JSON) JSON.parse(value);
+					writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
+					if (dataExtratorConfig.unique != null) {
+						jsonValue = filter(jsonValue, dataExtratorConfig.unique);
 					}
+					if (jsonValue != null) {
+						runtimeContext.put(entry.getKey(), jsonValue);
+					}
+				} else {
+					runtimeContext.put(entry.getKey(), value);
 				}
 			}
 		}
 		return runtimeContext;
 	}
-	
-	public final void writeTemplates(JSON src,RuntimeContext context,HashMap<String,String> templates) throws IOException{
-		if (templates.isEmpty()){
+
+	public final void writeTemplates(JSON src, RuntimeContext context, HashMap<String, String> templates)
+			throws IOException {
+		if (templates.isEmpty()) {
 			return;
 		}
-		if (src instanceof JSONObject){
+		if (src instanceof JSONObject) {
 			JSONObject data = (JSONObject) src;
-			for (Entry<String,String> entry : templates.entrySet()) {
+			for (Entry<String, String> entry : templates.entrySet()) {
 				String result = context.parse(entry.getValue());
-				if (!result.isEmpty()){
+				if (!result.isEmpty()) {
 					data.put(entry.getKey(), result);
 					continue;
 				}
 			}
-		}else{
+		} else {
 			JSONArray dataArr = (JSONArray) src;
 			for (int i = 0; i < dataArr.size(); i++) {
 				JSONObject item = dataArr.getJSONObject(i);
@@ -133,26 +132,26 @@ public class BasicPageProcessor implements PageProcessor {
 			}
 		}
 	}
-	
-	public final JSON filter(JSON src,List<String> unique){
-		if (src instanceof JSONObject){
+
+	public final JSON filter(JSON src, List<String> unique) {
+		if (src instanceof JSONObject) {
 			JSONObject data = (JSONObject) src;
 			String[] fields = new String[unique.size()];
 			for (int i = 0; i < fields.length; i++) {
 				fields[i] = data.getString(unique.get(i));
 			}
 			boolean exists = DownloadServer.getInstance().getMasterServer().filterQuery(taskId, fields).get();
-			if (exists){
+			if (exists) {
 				return null;
 			}
 			return data;
-		}else{
+		} else {
 			JSONArray dataArr = (JSONArray) src;
 			JSONArray ret = new JSONArray();
 			for (int i = 0; i < dataArr.size(); i++) {
 				JSONObject item = dataArr.getJSONObject(i);
 				item = (JSONObject) filter(item, unique);
-				if (item != null){
+				if (item != null) {
 					ret.add(item);
 				}
 			}

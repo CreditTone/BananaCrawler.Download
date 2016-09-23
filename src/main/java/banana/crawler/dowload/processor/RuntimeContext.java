@@ -23,15 +23,23 @@ import banana.core.response.Page;
 
 public final class RuntimeContext implements ContextModle {
 
-	private static final Handlebars handlebars = new ExpandHandlebars();
+	private static final ExpandHandlebars handlebars = new ExpandHandlebars();
 	
 	static{
 		handlebars.registerHelper("existKey", new Helper<Object>() {
 
 			public Object apply(Object context, Options options) throws IOException {
-				String key = options.param(0);
+				String path = options.param(0);
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				return runtimeContext.containsKey(key);
+				return runtimeContext.existKey(path);
+			}
+		});
+		handlebars.registerHelper("isEmpty", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String path = options.param(0);
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				return !runtimeContext.existKey(path);
 			}
 		});
 		handlebars.registerHelper("containString", new Helper<Object>() {
@@ -71,7 +79,26 @@ public final class RuntimeContext implements ContextModle {
 	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext) {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
-		put("_", "");
+	}
+	
+	public boolean existKey(String path) {
+		String[] keys = path.split("\\.");
+		Object value = get(keys[0]);
+		for (int i = 1; i < keys.length; i++) {
+			if (value == null ){
+				break;
+			}
+			if (keys[i].startsWith("[")){
+				int index = Integer.parseInt(keys[i].substring(1, keys[i].length()-1));
+				value = ((List<Object>)value).get(index);
+			}else{
+				value = ((Map<String,Object>)value).get(keys[i]);
+			}
+		}
+		if (value != null){
+			return !value.equals("");
+		}
+		return false;
 	}
 	
 	public String parse(String line) throws IOException {
@@ -82,7 +109,7 @@ public final class RuntimeContext implements ContextModle {
 		if (!line.contains("{{")){
 			return line;
 		}
-		Template template = handlebars.compileInline(line);
+		Template template = handlebars.compileEscapeInline(line);
 		if (tempDataContext != null){
 			HashMap<String, Object> temp = new HashMap<String, Object>(tempDataContext) {
 
@@ -94,11 +121,10 @@ public final class RuntimeContext implements ContextModle {
 					}
 					return RuntimeContext.this.get(key);
 				}
-
 			};
-			return StringEscapeUtils.unescapeHtml(template.apply(temp));
+			return template.apply(temp);
 		}
-		return StringEscapeUtils.unescapeHtml(template.apply(this));
+		return template.apply(this);
 	}
 	
 	public void setDataContext(Map<String, Object> dataContext){

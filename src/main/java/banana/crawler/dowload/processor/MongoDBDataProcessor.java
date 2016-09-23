@@ -7,7 +7,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.mongodb.BasicDBObject;
+import org.apache.log4j.Logger;
+
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.MongoClient;
@@ -19,6 +20,8 @@ import banana.core.modle.CrawlData;
 import banana.core.processor.DataProcessor;
 
 public class MongoDBDataProcessor implements DataProcessor {
+	
+	private static Logger logger = Logger.getLogger(MongoDBDataProcessor.class);
 
 	private DB db;
 	
@@ -67,7 +70,8 @@ public class MongoDBDataProcessor implements DataProcessor {
 		DBCollection dbCollection = db.getCollection(collection[0]);
 		for (CrawlData data : objectContainer) {
 			if (data.isUpdate()){
-				dbCollection.update(data.getUpdateQuery(), data.getData());
+				dbCollection.update(data.getUpdateQuery(), data.getData(), false, true);
+				logger.info(String.format("update %s %s",collection[0] ,data.getUpdateQuery()));
 			}else{
 				dbCollection.insert(data.getData());
 			}
