@@ -47,7 +47,7 @@ public final class RuntimeContext implements ContextModle {
 			public Object apply(Object context, Options options) throws IOException {
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
 				String content = (String) runtimeContext.get("_content");
-				for (int i = 1; i < options.params.length; i++) {
+				for (int i = 0; i < options.params.length; i++) {
 					if (!content.contains(options.param(i).toString())){
 						return false;
 					}
