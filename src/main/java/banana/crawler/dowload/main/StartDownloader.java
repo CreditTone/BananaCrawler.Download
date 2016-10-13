@@ -9,13 +9,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
 
-import banana.core.processor.DataProcessor;
-import banana.core.processor.Extractor;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.impl.DownloadServer;
-import banana.crawler.dowload.impl.JsonRpcExtractor;
-import banana.crawler.dowload.processor.MongoDBDataProcessor;
 
 public class StartDownloader {
 

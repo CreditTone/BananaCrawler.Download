@@ -107,7 +107,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 				if (requestExtractorConfig.dataContext != null){
 					JSON contextData = (JSON) runtimeContext.get(requestExtractorConfig.dataContext.key);
 					if (contextData != null){
-						if (contextData instanceof JSONObject) {
+						if (contextData instanceof JSONObject && (requestExtractorConfig.condition == null || runtimeContext.parse(requestExtractorConfig.condition,(Map<String, Object>) contextData).equals("true"))) {
 							JSONArray temp = new JSONArray();
 							temp.add(contextData);
 							contextData = temp;
@@ -116,18 +116,20 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 							JSONArray requestDataArr = (JSONArray) contextData;
 							for (int j = 0; j < requestDataArr.size(); j++) {
 								runtimeContext.setDataContext((Map)requestDataArr.get(j));
-								JSONObject jsonObject = new JSONObject();
-								writeTemplates(jsonObject, runtimeContext, requestExtractorConfig.templates);
-								if (requestExtractorConfig.unique != null){
-									jsonObject = (JSONObject) filter(jsonObject, requestExtractorConfig.unique);
-								}
-								if (jsonObject != null){
-									PageRequest req = createRequest(runtimeContext, requestExtractorConfig, jsonObject).get(0);
-									if (req != null){
-										if (requestExtractorConfig.dataContext.data_flow){
-											req.addAttribute("_data", requestDataArr.get(j));
+								if (requestExtractorConfig.condition == null || runtimeContext.parse(requestExtractorConfig.condition).equals("true")){
+									JSONObject jsonObject = new JSONObject();
+									writeTemplates(jsonObject, runtimeContext, requestExtractorConfig.templates);
+									if (requestExtractorConfig.unique != null){
+										jsonObject = (JSONObject) filter(jsonObject, requestExtractorConfig.unique);
+									}
+									if (jsonObject != null){
+										PageRequest req = createRequest(runtimeContext, requestExtractorConfig, jsonObject).get(0);
+										if (req != null){
+											if (requestExtractorConfig.dataContext.data_flow){
+												req.addAttribute("_data", requestDataArr.get(j));
+											}
+											queue.add(req);
 										}
-										queue.add(req);
 									}
 								}
 								runtimeContext.setDataContextNull();

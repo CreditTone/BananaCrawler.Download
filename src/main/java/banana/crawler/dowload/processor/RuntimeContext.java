@@ -111,20 +111,11 @@ public final class RuntimeContext implements ContextModle {
 		}
 		Template template = handlebars.compileEscapeInline(line);
 		if (tempDataContext != null){
-			HashMap<String, Object> temp = new HashMap<String, Object>(tempDataContext) {
-
-				@Override
-				public Object get(Object key) {
-					Object value = super.get(key);
-					if (value != null) {
-						return value;
-					}
-					return RuntimeContext.this.get(key);
-				}
-			};
-			return template.apply(temp);
+			setDataContext(tempDataContext);
 		}
-		return template.apply(this);
+		String ret = template.apply(this);
+		setDataContextNull();
+		return ret;
 	}
 	
 	public void setDataContext(Map<String, Object> dataContext){
