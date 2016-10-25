@@ -11,20 +11,24 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
-import banana.core.download.impl.DefaultPageDownloader;
+import banana.core.download.impl.DefaultHttpDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
+import banana.core.processor.BinaryProcessor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.Task;
 import banana.core.request.BasicRequest;
+import banana.core.request.BinaryRequest;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.PageRequest.PageEncoding;
 import banana.core.request.TransactionRequest;
 import banana.core.response.Page;
+import banana.core.response.StreamResponse;
 import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
+import banana.crawler.dowload.processor.JSONConfigDownloadProcessor;
 import banana.crawler.dowload.processor.JSONConfigPageProcessor;
 import banana.crawler.dowload.processor.ProcessorForwarder;
 
@@ -44,7 +48,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
-	private DefaultPageDownloader defaultPageDownloader = new DefaultPageDownloader();
+	private Map<String,BinaryProcessor> binaryProcesors = new HashMap<String,BinaryProcessor>();
+	
+	private DefaultHttpDownloader httpDownloader = new DefaultHttpDownloader();
 	
 	private CountableThreadPool downloadThreadPool;
 	
@@ -78,10 +84,10 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			}
 			PageProcessor pageProcessor = findPageProcessor(pageRequest.getProcessor());
 			if(pageProcessor == null){
-				logger.warn("Not Found PageProcessor Name:"+pageRequest.getProcessor());
+				logger.warn("Not Found PageProcessor Name:" + pageRequest.getProcessor());
 				return false;
 			}
-			Page page = defaultPageDownloader.download(pageRequest);
+			Page page = httpDownloader.download(pageRequest);
 			if (page == null){
 				return false;
 			}
@@ -91,6 +97,21 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				logger.info(String.format("%s StatusCode:%s", pageRequest.getUrl(), page.getStatus()));
 			}
 			processPage(pageProcessor, page);
+			break;
+		case BINARY_REQUEST:
+			final BinaryRequest binaryRequest = (BinaryRequest) request;
+			BinaryProcessor binaryProcessor = findBinaryProcessor(binaryRequest.getProcessor());
+			if(binaryProcessor == null){
+				logger.warn("Not Found BinaryProcessor Name:" + binaryRequest.getProcessor());
+				return false;
+			}
+			StreamResponse stream = httpDownloader.downloadBinary(binaryRequest);
+			if (binaryRequest.getMethod() == HttpRequest.Method.POST){
+				logger.info(String.format("%s Post:%s StatusCode:%s", binaryRequest.getUrl(), binaryRequest.getParams(), stream.getStatus()));
+			}else{
+				logger.info(String.format("%s StatusCode:%s", binaryRequest.getUrl(), stream.getStatus()));
+			}
+			binaryProcessor.process(stream);
 			break;
 		case TRANSACTION_REQUEST:
 			TransactionRequest transactionRequest = (TransactionRequest) request;
@@ -104,21 +125,40 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		return true;
 	}
 	
+	private BinaryProcessor findBinaryProcessor(String processor) {
+		BinaryProcessor binaryProcessor = binaryProcesors.get("def");
+		if(binaryProcessor == null){
+			binaryProcessor = addBinaryProcessor(processor);
+		}
+		return binaryProcessor;
+	}
+
+	private synchronized BinaryProcessor addBinaryProcessor(String processor) {
+		if(binaryProcesors.get(processor) != null){
+			return binaryProcesors.get(processor);
+		}
+		BinaryProcessor binaryProcesor = new JSONConfigDownloadProcessor();
+		binaryProcesors.put("def", binaryProcesor);
+		return binaryProcesors.get("def");
+	}
+
 	private synchronized PageProcessor addPageProcessor(String processor) {
 		if(pageProcessors.get(processor) != null){
 			return pageProcessors.get(processor);
 		}
 		for (Task.ProcessorForwarder forwarderConfig : config.forwarders) {
 			if (processor.equals(forwarderConfig.index)){
-				return new ProcessorForwarder(taskId, forwarderConfig, this);
+				pageProcessors.put(processor, new ProcessorForwarder(taskId, forwarderConfig, this));
+				break;
 			}
 		}
 		for (Task.Processor processorConfig : config.processors) {
 			if (processor.equals(processorConfig.index)){
-				return new JSONConfigPageProcessor(taskId, processorConfig);
+				pageProcessors.put(processor, new JSONConfigPageProcessor(taskId, processorConfig));
+				break;
 			}
 		}
-		return null;
+		return pageProcessors.get(processor);
 	}
 	
 	public PageProcessor findPageProcessor(String processor) {
@@ -208,7 +248,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		logger.info("DownloadTracker TaskId = " + taskId);
 		logger.info("DownloadTracker thread = " + downloadThreadPool.getThreadNum());
 		runing = true;
-		defaultPageDownloader.open();//打开下载器
+		httpDownloader.open();//打开下载器
 		HttpRequest request = null;
 		while(runing){
 			try{
@@ -239,7 +279,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	private void release() {
 		downloadThreadPool.close();
 		try {
-			defaultPageDownloader.close();
+			httpDownloader.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -249,7 +289,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	@Override
 	public Page sendRequest(PageRequest request) {
-		Page page = defaultPageDownloader.download(request);
+		Page page = httpDownloader.download(request);
 		return page;
 	}
 }

@@ -54,10 +54,20 @@ public class RequestExtractorConfig {
 		}
 		Map<String,Object> bodyConfig = new HashMap<String,Object>();
 		String urlXpath = (String) config.get("url");
-		if (urlXpath.contains("{{")){
-			templates.put("url", urlXpath);
-		}else{
-			bodyConfig.put("url", urlXpath);
+		if (urlXpath != null){
+			if (urlXpath.contains("{{")){
+				templates.put("url", urlXpath);
+			}else{
+				bodyConfig.put("url", urlXpath);
+			}
+		}
+		String download = (String) config.get("download");
+		if (download != null){
+			if (download.contains("{{")){
+				templates.put("download", download);
+			}else{
+				bodyConfig.put("download", download);
+			}
 		}
 		if (config.containsKey("attribute")){
 			Object attributeDefine = config.get("attribute");

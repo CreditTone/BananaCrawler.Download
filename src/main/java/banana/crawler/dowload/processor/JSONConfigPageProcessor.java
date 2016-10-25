@@ -41,8 +41,6 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 	private static Logger logger = Logger.getLogger(JSONConfigPageProcessor.class);
 	
-	private Task.Processor config;
-	
 	private DataExtractorConfig[] dataParser;
 	
 	private RequestExtractorConfig[] requestParser;
@@ -53,7 +51,6 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 	public JSONConfigPageProcessor(String taskId,Processor config,Extractor extractor) {
 		super(taskId, config, extractor);
-		this.config = config;
 		if (config.crawler_data != null) {
 			dataParser = new DataExtractorConfig[config.crawler_data.length];
 			for (int i = 0 ;i < config.crawler_data.length ;i++) {
@@ -123,7 +120,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 										jsonObject = (JSONObject) filter(jsonObject, requestExtractorConfig.unique);
 									}
 									if (jsonObject != null){
-										PageRequest req = createRequest(runtimeContext, requestExtractorConfig, jsonObject).get(0);
+										HttpRequest req = createRequest(runtimeContext, requestExtractorConfig, jsonObject).get(0);
 										if (req != null){
 											if (requestExtractorConfig.dataContext.data_flow){
 												req.addAttribute("_data", requestDataArr.get(j));
@@ -148,7 +145,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 							data = filter(data, requestExtractorConfig.unique);
 						}
 						if (data != null){
-							List<PageRequest> resps = createRequest(runtimeContext, requestExtractorConfig, data);
+							List<HttpRequest> resps = createRequest(runtimeContext, requestExtractorConfig, data);
 							if (resps != null){
 								queue.addAll(resps);
 							}
@@ -201,13 +198,18 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		return map;
 	}
 	
-	private List<PageRequest> createRequest(RuntimeContext runtimeContext,RequestExtractorConfig requestExtractorConfig,JSON data) throws IOException{
+	private List<HttpRequest> createRequest(RuntimeContext runtimeContext,RequestExtractorConfig requestExtractorConfig,JSON data) throws IOException{
 		if (data instanceof JSONObject){
 			JSONObject dataObj = (JSONObject) data;
-			if (dataObj.getString("url") == null){
+			if (dataObj.getString("url") == null && dataObj.getString("download") == null){
 				return null;
 			}
-			PageRequest req = RequestBuilder.createPageRequest(dataObj.getString("url"), requestExtractorConfig.processor);
+			HttpRequest req = null;
+			if (dataObj.getString("url") != null){
+				req = RequestBuilder.createPageRequest(dataObj.getString("url"), requestExtractorConfig.processor);
+			}else{
+				req = RequestBuilder.createBinaryRequest(dataObj.getString("download"), requestExtractorConfig.processor);
+			}
 			if (dataObj.containsKey("attribute")){
 				Map<String,Object> attribute = (Map<String, Object>) dataObj.get("attribute");
 				for (Entry<String, Object> pair:attribute.entrySet()) {
@@ -235,10 +237,10 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			req.setPriority(requestExtractorConfig.priority);
 			return Arrays.asList(req);
 		}else{
-			List<PageRequest> reqs = new ArrayList<PageRequest>();
+			List<HttpRequest> reqs = new ArrayList<HttpRequest>();
 			JSONArray dataArr = (JSONArray) data;
 			for (int i = 0; i < dataArr.size(); i++) {
-				List<PageRequest> oneReq = createRequest(runtimeContext, requestExtractorConfig, dataArr.getJSONObject(i));
+				List<HttpRequest> oneReq = createRequest(runtimeContext, requestExtractorConfig, dataArr.getJSONObject(i));
 				if (oneReq != null){
 					reqs.add(oneReq.get(0));
 				}
