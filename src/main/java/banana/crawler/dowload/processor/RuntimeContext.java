@@ -114,7 +114,6 @@ public final class RuntimeContext implements ContextModle {
 			setDataContext(tempDataContext);
 		}
 		String ret = template.apply(this);
-		setDataContextNull();
 		return ret;
 	}
 	

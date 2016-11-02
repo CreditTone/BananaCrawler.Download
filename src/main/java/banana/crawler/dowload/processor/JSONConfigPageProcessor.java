@@ -3,7 +3,6 @@ package banana.crawler.dowload.processor;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -81,18 +80,21 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 				if (dataExtractorConfig.condition == null || runtimeContext.parse(dataExtractorConfig.condition).equals("true")){
 					responseJson = extractor.parseData(dataExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
-						continue;
+						logger.info(String.format("parse data null %s", dataExtractorConfig.parseConfig));
 					}
-					if (responseJson.startsWith("{") || responseJson.startsWith("[")){
-						JSON result = (JSON) JSON.parse(responseJson);
+					JSON result = null;
+					if ((responseJson != null) && (responseJson.startsWith("{") || responseJson.startsWith("["))){
+						result = (JSON) JSON.parse(responseJson);
 						writeTemplates(result, runtimeContext, dataExtractorConfig.templates);
 						copy(_data, result);
-						if (dataExtractorConfig.unique != null){
-							result = filter(result, dataExtractorConfig.unique);
-						}
-						if (result != null){
-							writeObject(runtimeContext, objectContainer, page.getRequest().getUrl(), result, dataExtractorConfig.update);
-						}
+					}else{
+						result = _data;
+					}
+					if (dataExtractorConfig.unique != null){
+						result = filter(result, dataExtractorConfig.unique);
+					}
+					if (result != null){
+						writeObject(runtimeContext, objectContainer, page.getRequest().getUrl(), result, dataExtractorConfig.update);
 					}
 				}
 			}

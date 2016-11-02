@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import com.alibaba.fastjson.JSON;
 
@@ -38,10 +40,18 @@ public class RequestExtractorConfig {
 			method = HttpRequest.Method.POST;
 		}
 		if (config.containsKey("params")) {
-			params = (HashMap<String, String>) config.get("params");
+			params = new HashMap<String, String>();
+			Set<Entry<String, Object>> keys = ((com.alibaba.fastjson.JSONObject) config.get("params")).entrySet();
+			for (Entry<String,Object> entry : keys) {
+				params.put(entry.getKey(), (String)entry.getValue());
+			}
 		}
 		if (config.containsKey("headers")){
-			headers = (HashMap<String, String>) config.get("headers");
+			headers = new HashMap<String, String>();
+			Set<Entry<String, Object>> keys = ((com.alibaba.fastjson.JSONObject) config.get("headers")).entrySet();
+			for (Entry<String,Object> entry : keys) {
+				headers.put(entry.getKey(), (String)entry.getValue());
+			}
 		}
 		if (config.containsKey("priority")){
 			priority = (int) config.get("priority");

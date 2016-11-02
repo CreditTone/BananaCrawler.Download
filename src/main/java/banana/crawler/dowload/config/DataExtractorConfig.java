@@ -1,5 +1,6 @@
 package banana.crawler.dowload.config;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,8 @@ public class DataExtractorConfig {
 			parseConfig = JSON.toJSONString(bodyConfig);
 		}else if (configObj instanceof List){
 			parseConfig = JSON.toJSONString(configObj);
+		}else if (configObj instanceof String){
+			parseConfig = JSON.toJSONString(Arrays.asList(configObj));
 		}
 	}
 	
