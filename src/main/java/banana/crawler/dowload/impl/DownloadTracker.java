@@ -11,7 +11,9 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import banana.core.download.HttpDownloader;
 import banana.core.download.impl.DefaultHttpDownloader;
+import banana.core.download.impl.PhantomJsDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
 import banana.core.processor.BinaryProcessor;
@@ -50,7 +52,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private Map<String,BinaryProcessor> binaryProcesors = new HashMap<String,BinaryProcessor>();
 	
-	private DefaultHttpDownloader httpDownloader = new DefaultHttpDownloader();
+	private HttpDownloader httpDownloader;
 	
 	private CountableThreadPool downloadThreadPool;
 	
@@ -58,6 +60,11 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		taskId = tId;
 		config = taskConfig;
 		downloadThreadPool = new CountableThreadPool(thread);
+		if (taskConfig.downloader.equals("default")){
+			httpDownloader = new DefaultHttpDownloader();
+		}else if (taskConfig.downloader.equals("phantomjs")){
+			httpDownloader = new PhantomJsDownloader();
+		}
 	}
 	
 	public boolean isRuning() {
