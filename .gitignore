@@ -7,3 +7,4 @@ log/
 doc/
 project/
 *DS_Store
+phantomjsdriver.log
