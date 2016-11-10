@@ -11,9 +11,10 @@ import org.apache.hadoop.ipc.ProtocolSignature;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.log4j.Logger;
 
-import banana.core.JedisOperator;
 import banana.core.NodeStatus;
 import banana.core.exception.DownloadException;
+import banana.core.modle.DownloaderConfig;
+import banana.core.modle.MasterConfig;
 import banana.core.processor.DataProcessor;
 import banana.core.processor.Extractor;
 import banana.core.protocol.CrawlerMasterProtocol;
@@ -31,6 +32,8 @@ public final class DownloadServer implements DownloadProtocol{
 	
 	private static Logger logger = Logger.getLogger(DownloadServer.class);
 	
+	public DownloaderConfig config;
+	
 	private CrawlerMasterProtocol master = null;
 
 	public Extractor extractor;
@@ -41,40 +44,18 @@ public final class DownloadServer implements DownloadProtocol{
 	
 	private static DownloadServer instance = null;
 	
-	public static DownloadServer initInstance(String masterHost) throws Exception {
-		if (instance == null){
-			try {
-				instance = new DownloadServer(masterHost);
-			} catch (Exception e) {
-				logger.warn("请确认master已经启动", e);
-				throw e;
-			}
-		}
-		Text mongoAddress = instance.master.getMasterPropertie("MONGO");
-		if (mongoAddress != null){
-			instance.dataProcessor = new MongoDBDataProcessor(mongoAddress.toString());
-		}
-		Text extractorAddress = instance.master.getMasterPropertie("EXTRACTOR");
-		if (extractorAddress != null){
-			instance.extractor = new JsonRpcExtractor(extractorAddress.toString());
-			instance.extractor.parseData("{}", "<html></html>");
-		}
-		return instance;
-	}
-	
 	public static final DownloadServer getInstance(){
 		return instance;
 	}
 	
-	private DownloadServer(String masterHost)throws Exception{
-		int port = 8666;
-		if (masterHost.contains(":")){
-			String[] split = masterHost.split(":");
-			masterHost = split[0];
-			port = Integer.parseInt(split[1]);
-		}
-		master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(masterHost,port),new Configuration());
-		master.getMasterPropertie("");
+	public DownloadServer(DownloaderConfig config)throws Exception{
+		master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(config.master.host,config.master.port),new Configuration());
+		MasterConfig masterConfig = master.getMasterConfig();
+		dataProcessor = new MongoDBDataProcessor(masterConfig.mongodb);
+		extractor = new JsonRpcExtractor(masterConfig.extractor);
+		extractor.parseData("{}", "<html></html>");
+		instance = this;
+		this.config = config;
 	}
 	
 	@Override

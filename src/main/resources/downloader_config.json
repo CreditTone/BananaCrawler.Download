@@ -1,0 +1,9 @@
+{
+	"listen":8667,
+	"handlers":10,
+	"master":{
+		"host":"localhost",
+		"port":8666
+	},
+	"phantomjs":"/Users/stephen/banana/phantomjs-2.1.1-macosx/bin/phantomjs"
+}

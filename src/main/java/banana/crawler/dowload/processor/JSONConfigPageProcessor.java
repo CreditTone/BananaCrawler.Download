@@ -208,9 +208,9 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			}
 			HttpRequest req = null;
 			if (dataObj.getString("url") != null){
-				req = RequestBuilder.createPageRequest(dataObj.getString("url"), requestExtractorConfig.processor);
+				req = RequestBuilder.custom().setUrl(dataObj.getString("url")).setProcessor(requestExtractorConfig.processor).build();
 			}else{
-				req = RequestBuilder.createBinaryRequest(dataObj.getString("download"), requestExtractorConfig.processor);
+				req = RequestBuilder.custom().setDownload(dataObj.getString("download")).setProcessor(requestExtractorConfig.processor).build();
 			}
 			if (dataObj.containsKey("attribute")){
 				Map<String,Object> attribute = (Map<String, Object>) dataObj.get("attribute");

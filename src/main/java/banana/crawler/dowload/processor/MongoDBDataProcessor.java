@@ -17,6 +17,7 @@ import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
 
 import banana.core.modle.CrawlData;
+import banana.core.modle.MasterConfig;
 import banana.core.processor.DataProcessor;
 
 public class MongoDBDataProcessor implements DataProcessor {
@@ -27,19 +28,15 @@ public class MongoDBDataProcessor implements DataProcessor {
 	
 	private static Set<String> collections = new HashSet<String>();
 
-	public MongoDBDataProcessor(String url) throws NumberFormatException, UnknownHostException {
-		String[] split = url.split(",");
+	public MongoDBDataProcessor(MasterConfig.MongoDB mongodb) throws NumberFormatException, UnknownHostException {
 		MongoClient client = null;
-		ServerAddress serverAddress = new ServerAddress(split[0], Integer.parseInt(split[1]));
+		ServerAddress serverAddress = new ServerAddress(mongodb.host, mongodb.port);
 		List<ServerAddress> seeds = new ArrayList<ServerAddress>();
 		seeds.add(serverAddress);
-		String userName = split[3];
-		String dataBase = split[2];
-		String password = split[4];
-		MongoCredential credentials = MongoCredential.createCredential(userName, dataBase,
-				password.toCharArray());
+		MongoCredential credentials = MongoCredential.createCredential(mongodb.username, mongodb.db,
+				mongodb.password.toCharArray());
 		client = new MongoClient(seeds, Arrays.asList(credentials), getOptions());
-		db = client.getDB(split[2]);
+		db = client.getDB(mongodb.db);
 	}
 
 	private MongoClientOptions getOptions() {

@@ -14,18 +14,19 @@ import org.apache.log4j.Logger;
 
 import com.googlecode.jsonrpc4j.JsonRpcClient;
 
+import banana.core.modle.MasterConfig;
 import banana.core.processor.Extractor;
 
 public class JsonRpcExtractor implements Extractor {
 	
 	private static Logger logger = Logger.getLogger(JsonRpcExtractor.class);
 	
-	private String remote;
+	private MasterConfig.Extractor config;
 	
 	private BlockingQueue<Socket> socketCache = new LinkedBlockingQueue<Socket>();
 	
-	public JsonRpcExtractor(String remote){
-		this.remote = remote;
+	public JsonRpcExtractor(MasterConfig.Extractor config){
+		this.config = config;
 	}
 
 	@Override
@@ -59,7 +60,7 @@ public class JsonRpcExtractor implements Extractor {
 		Socket socket = null;
 		while(true){
 			if (socketCache.isEmpty()){
-				Socket so = new Socket(remote, 8585);
+				Socket so = new Socket(config.host, config.port);
 				so.setTcpNoDelay(true);
 				so.setKeepAlive(true);
 				so.setSoTimeout(1000 * 60);

@@ -63,7 +63,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		if (taskConfig.downloader.equals("default")){
 			httpDownloader = new DefaultHttpDownloader();
 		}else if (taskConfig.downloader.equals("phantomjs")){
-			httpDownloader = new PhantomJsDownloader();
+			httpDownloader = new PhantomJsDownloader(DownloadServer.getInstance().config.phantomjs);
 		}
 	}
 	
@@ -83,8 +83,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	}
 
 	private final boolean download(BasicRequest request){
-		switch(request.getType()){
-		case PAGE_REQUEST:
+		if (request instanceof PageRequest){
 			final PageRequest pageRequest = (PageRequest) request;
 			if(pageRequest.getPageEncoding()==null){
 				pageRequest.setPageEncoding(PageEncoding.UTF8);
@@ -104,8 +103,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				logger.info(String.format("%s StatusCode:%s", pageRequest.getUrl(), page.getStatus()));
 			}
 			processPage(pageProcessor, page);
-			break;
-		case BINARY_REQUEST:
+		}else{
 			final BinaryRequest binaryRequest = (BinaryRequest) request;
 			BinaryProcessor binaryProcessor = findBinaryProcessor(binaryRequest.getProcessor());
 			if(binaryProcessor == null){
@@ -119,15 +117,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				logger.info(String.format("%s StatusCode:%s", binaryRequest.getUrl(), stream.getStatus()));
 			}
 			binaryProcessor.process(stream);
-			break;
-		case TRANSACTION_REQUEST:
-			TransactionRequest transactionRequest = (TransactionRequest) request;
-			Iterator<BasicRequest> basicRequestIter = transactionRequest.iteratorChildRequest();
-			while(basicRequestIter.hasNext()){
-				BasicRequest child = basicRequestIter.next();
-				download(child);
-			}
-			break;
 		}
 		return true;
 	}
