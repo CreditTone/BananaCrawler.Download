@@ -15,7 +15,6 @@ import org.apache.hadoop.ipc.RPC.Server;
 import com.alibaba.fastjson.JSON;
 
 import banana.core.modle.DownloaderConfig;
-import banana.core.modle.MasterConfig;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.impl.DownloadServer;
@@ -34,11 +33,18 @@ public class StartDownloader {
 		    formatter.printHelp("Downloader", options);
 		    System.exit(0);
 		}
-		String configFile = StartDownloader.class.getClassLoader().getResource("").getPath() + "/downloader_config.json";
+		File configFile = new File("downloader_config.json");
 		if (commandLine.hasOption("c")){
-			configFile = commandLine.getOptionValue("c");
+			configFile = new File(commandLine.getOptionValue("c"));
+		}else if (!configFile.exists()){
+			try{
+				configFile = new File(StartDownloader.class.getClassLoader().getResource("").getPath() + "/downloader_config.json");
+			}catch(Exception e){
+				System.out.println("请指定配置文件位置");
+				System.exit(0);
+			}
 		}
-		DownloaderConfig config = JSON.parseObject(FileUtils.readFileToString(new File(configFile)),DownloaderConfig.class);
+		DownloaderConfig config = JSON.parseObject(FileUtils.readFileToString(configFile),DownloaderConfig.class);
 		DownloadServer downloadServer = new DownloadServer(config);
 		String localIp = SystemUtil.getLocalIP();
 		Server server = new RPC.Builder(new Configuration()).setProtocol(DownloadProtocol.class)
