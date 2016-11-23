@@ -64,7 +64,12 @@ public final class RuntimeContext implements ContextModle {
 	private Map<String, Object> dataContext;
 	
 	public static final RuntimeContext create(Page page,StartContext context){
-		HttpRequest request = page.getRequest();
+		RuntimeContext runtimeContext = RuntimeContext.create(page.getRequest(), context);
+		runtimeContext.put("_content", page.getContent());
+		return runtimeContext;
+	}
+	
+	public static final RuntimeContext create(HttpRequest request,StartContext context){
 		Map<String,Object> pageContext = new HashMap<String,Object>();
 		pageContext.put("_url", request.getUrl());
 		List<NameValuePair> pair = request.getNameValuePairs();
@@ -72,7 +77,6 @@ public final class RuntimeContext implements ContextModle {
 			pageContext.put(pr.getName(), pr.getValue());
 		}
 		RuntimeContext runtimeContext = new RuntimeContext(request.getAttributes(), pageContext);
-		runtimeContext.put("_content", page.getContent());
 		return runtimeContext;
 	}
 

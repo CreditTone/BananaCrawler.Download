@@ -1,63 +1,50 @@
 package banana.crawler.dowload.processor;
 
-import java.io.File;
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
+import java.util.Map;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.gridfs.GridFS;
+import com.mongodb.gridfs.GridFSInputFile;
+
 import banana.core.processor.BinaryProcessor;
-import banana.core.request.HttpRequest;
+import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.response.StreamResponse;
+import banana.crawler.dowload.impl.DownloadServer;
 
 public class JSONConfigDownloadProcessor implements BinaryProcessor {
 	
 	private static Logger logger = Logger.getLogger(JSONConfigDownloadProcessor.class);
 	
-	//OSSClient client = new OSSClient("http://oss-cn-qingdao.aliyuncs.com", "LTAIFJ29bKun4hUL", "ixUaDDa8kot5wZKsdxhcSIpFVErFgO");
-
-	private String workDir = new SimpleDateFormat("yyyyMMdd").format(new Date());
+	private DownloadProcessor config;
 	
-	private int dayOfMonth = 0;
-	
-	public JSONConfigDownloadProcessor() {
-	}
-	
-	public static void main(String[] args) {
-		new JSONConfigDownloadProcessor();
+	public JSONConfigDownloadProcessor(DownloadProcessor config) {
+		this.config = config;
 	}
 	
 	@Override
-	public void process(StreamResponse stream) {
-		checkDayOfMonth();
-		HttpRequest binaryRequest = stream.getRequest();
-		String filename = binaryRequest.getAttribute("music")+"_"+binaryRequest.getAttribute("zuozhe");
-		filename = filename.replaceAll("/", "").replaceAll("\"", "").replaceAll("-", "").replaceAll("#", "");
-		if (binaryRequest.getUrl().equals("mp3")){
-			filename+=".mp3";
-		}else{
-			filename+=".aac";
-		}
-		//PutObjectResult result = client.putObject("japan2music", "Japan/"+workDir+"/"+filename, in);
-		//logger.info("put object " +result.getRequestId());
-		try {
-			FileUtils.writeByteArrayToFile(new File("/data/"+workDir+"/"+filename), stream.getBody());
-		} catch (IOException e) {
-			e.printStackTrace();
+	public void process(StreamResponse stream,String ... args) throws Exception {
+		GridFS tracker_status = new GridFS(DownloadServer.getInstance().db, args[0]);
+		RuntimeContext runtimeContext = RuntimeContext.create(stream.getRequest(), null);
+		for (Map<String,String> fileConfig : config.files) {
+			String filename = fileConfig.get("filename");
+			filename = runtimeContext.parse(filename);
+			String contentType = fileConfig.get("contentType");
+			if (contentType != null){
+				contentType = runtimeContext.parse(contentType);
+			}
+			String aliases = fileConfig.get("aliases");
+			if (aliases != null){
+				aliases = runtimeContext.parse(aliases);
+			}
+			GridFSInputFile file = tracker_status.createFile(stream.getBody());
+			file.setFilename(filename);
+			file.setContentType(contentType);
+			file.setMetaData(new BasicDBObject("aliases", aliases));
+			file.save();
 		}
 	}
 	
-	private final synchronized boolean checkDayOfMonth(){
-		if (dayOfMonth != Calendar.getInstance().get(Calendar.DAY_OF_MONTH)){
-			workDir = new SimpleDateFormat("yyyyMMdd").format(new Date());
-			dayOfMonth = Calendar.getInstance().get(Calendar.DAY_OF_MONTH);
-			new File("/data/"+workDir).mkdirs();
-			return true;
-		}
-		return false;
-	}
 
 }

@@ -20,6 +20,7 @@ import banana.core.processor.BinaryProcessor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.CrawlerMasterProtocol;
 import banana.core.protocol.Task;
+import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.request.BasicRequest;
 import banana.core.request.BinaryRequest;
 import banana.core.request.HttpRequest;
@@ -116,13 +117,20 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			}else{
 				logger.info(String.format("%s StatusCode:%s", binaryRequest.getUrl(), stream.getStatus()));
 			}
-			binaryProcessor.process(stream);
+			if (stream.getStatus() == 200){
+				try {
+					binaryProcessor.process(stream);
+				} catch (Exception e) {
+					e.printStackTrace();
+					logger.error("离线处理异常URL:"+binaryRequest.getUrl(),e);
+				}
+			}
 		}
 		return true;
 	}
 	
 	private BinaryProcessor findBinaryProcessor(String processor) {
-		BinaryProcessor binaryProcessor = binaryProcesors.get("def");
+		BinaryProcessor binaryProcessor = binaryProcesors.get(processor);
 		if(binaryProcessor == null){
 			binaryProcessor = addBinaryProcessor(processor);
 		}
@@ -133,9 +141,14 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		if(binaryProcesors.get(processor) != null){
 			return binaryProcesors.get(processor);
 		}
-		BinaryProcessor binaryProcesor = new JSONConfigDownloadProcessor();
-		binaryProcesors.put("def", binaryProcesor);
-		return binaryProcesors.get("def");
+		for (DownloadProcessor pro : config.download_processors) {
+			if (pro.index.equals(processor)){
+				BinaryProcessor binaryProcesor = new JSONConfigDownloadProcessor(pro);
+				binaryProcesors.put(processor, binaryProcesor);
+				break;
+			}
+		}
+		return binaryProcesors.get(processor);
 	}
 
 	private synchronized PageProcessor addPageProcessor(String processor) {

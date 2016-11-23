@@ -2,7 +2,10 @@ package banana.crawler.dowload.impl;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
@@ -10,6 +13,12 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.ProtocolSignature;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.log4j.Logger;
+
+import com.mongodb.DB;
+import com.mongodb.MongoClient;
+import com.mongodb.MongoClientOptions;
+import com.mongodb.MongoCredential;
+import com.mongodb.ServerAddress;
 
 import banana.core.NodeStatus;
 import banana.core.exception.DownloadException;
@@ -35,6 +44,8 @@ public final class DownloadServer implements DownloadProtocol{
 	public DownloaderConfig config;
 	
 	private CrawlerMasterProtocol master = null;
+	
+	public DB db;
 
 	public Extractor extractor;
 	
@@ -51,11 +62,19 @@ public final class DownloadServer implements DownloadProtocol{
 	public DownloadServer(DownloaderConfig config)throws Exception{
 		master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(config.master.host,config.master.port),new Configuration());
 		MasterConfig masterConfig = master.getMasterConfig();
-		dataProcessor = new MongoDBDataProcessor(masterConfig.mongodb);
+		dataProcessor = new MongoDBDataProcessor();
 		extractor = new JsonRpcExtractor(masterConfig.extractor);
 		extractor.parseData("{}", "<html></html>");
 		instance = this;
 		this.config = config;
+		MongoClient client = null;
+		ServerAddress serverAddress = new ServerAddress(masterConfig.mongodb.host, masterConfig.mongodb.port);
+		List<ServerAddress> seeds = new ArrayList<ServerAddress>();
+		seeds.add(serverAddress);
+		MongoCredential credentials = MongoCredential.createCredential(masterConfig.mongodb.username, masterConfig.mongodb.db,
+				masterConfig.mongodb.password.toCharArray());
+		client = new MongoClient(seeds, Arrays.asList(credentials), getOptions());
+		db = client.getDB(masterConfig.mongodb.db);
 	}
 	
 	@Override
@@ -126,6 +145,19 @@ public final class DownloadServer implements DownloadProtocol{
 			throw new DownloadException("Can't find the downloader");
 		}
 		return d.isWaitRequest();
+	}
+	
+	private MongoClientOptions getOptions() {
+		MongoClientOptions.Builder build = new MongoClientOptions.Builder();
+		// 与数据最大连接数50
+		build.connectionsPerHost(50);
+		// 如果当前所有的connection都在使用中，则每个connection上可以有50个线程排队等待
+		build.threadsAllowedToBlockForConnectionMultiplier(50);
+		build.connectTimeout(60 * 1000);
+		build.maxWaitTime(60 * 1000);
+		build.socketTimeout(60 * 1000);
+		MongoClientOptions options = build.build();
+		return options;
 	}
 
 }
