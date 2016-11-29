@@ -1,4 +1,4 @@
-package banana.crawler.dowload.processor;
+package banana.dowloader.processor;
 
 import java.util.Map;
 
@@ -11,7 +11,7 @@ import com.mongodb.gridfs.GridFSInputFile;
 import banana.core.processor.BinaryProcessor;
 import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.response.StreamResponse;
-import banana.crawler.dowload.impl.DownloadServer;
+import banana.dowloader.impl.DownloadServer;
 
 public class JSONConfigDownloadProcessor implements BinaryProcessor {
 	

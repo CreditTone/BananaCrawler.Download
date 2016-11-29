@@ -1,4 +1,4 @@
-package banana.crawler.dowload.config;
+package banana.dowloader.config;
 
 import java.util.Arrays;
 import java.util.HashMap;

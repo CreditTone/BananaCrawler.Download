@@ -1,4 +1,4 @@
-package banana.crawler.dowload.processor;
+package banana.dowloader.processor;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,9 +26,9 @@ import banana.core.request.PageRequest;
 import banana.core.request.RequestBuilder;
 import banana.core.request.StartContext;
 import banana.core.response.Page;
-import banana.crawler.dowload.config.DataExtractorConfig;
-import banana.crawler.dowload.config.RequestExtractorConfig;
-import banana.crawler.dowload.impl.DownloadServer;
+import banana.dowloader.config.DataExtractorConfig;
+import banana.dowloader.config.RequestExtractorConfig;
+import banana.dowloader.impl.DownloadServer;
 
 public class JSONConfigPageProcessor extends BasicPageProcessor {
 	

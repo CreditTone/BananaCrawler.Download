@@ -1,4 +1,4 @@
-package banana.crawler.dowload.impl;
+package banana.dowloader.impl;
 
 import java.io.IOException;
 import java.io.InputStream;

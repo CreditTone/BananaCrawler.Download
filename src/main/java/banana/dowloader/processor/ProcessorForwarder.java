@@ -1,4 +1,4 @@
-package banana.crawler.dowload.processor;
+package banana.dowloader.processor;
 
 import java.util.List;
 import java.util.Map;
@@ -8,8 +8,8 @@ import banana.core.processor.PageProcessor;
 import banana.core.request.HttpRequest;
 import banana.core.request.StartContext;
 import banana.core.response.Page;
-import banana.crawler.dowload.impl.DownloadServer;
-import banana.crawler.dowload.impl.DownloadTracker;
+import banana.dowloader.impl.DownloadServer;
+import banana.dowloader.impl.DownloadTracker;
 
 public class ProcessorForwarder extends BasicPageProcessor {
 	

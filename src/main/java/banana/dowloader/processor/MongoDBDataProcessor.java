@@ -1,4 +1,4 @@
-package banana.crawler.dowload.processor;
+package banana.dowloader.processor;
 
 import java.util.HashSet;
 import java.util.List;
@@ -10,7 +10,7 @@ import com.mongodb.DBCollection;
 
 import banana.core.modle.CrawlData;
 import banana.core.processor.DataProcessor;
-import banana.crawler.dowload.impl.DownloadServer;
+import banana.dowloader.impl.DownloadServer;
 
 public class MongoDBDataProcessor implements DataProcessor {
 	

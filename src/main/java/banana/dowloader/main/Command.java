@@ -1,4 +1,4 @@
-package banana.crawler.dowload.main;
+package banana.dowloader.main;
 
 import java.io.File;
 
@@ -8,16 +8,11 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.io.FileUtils;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.ipc.RPC;
-import org.apache.hadoop.ipc.RPC.Server;
 
 import com.alibaba.fastjson.JSON;
 
 import banana.core.modle.DownloaderConfig;
-import banana.core.protocol.DownloadProtocol;
-import banana.core.util.SystemUtil;
-import banana.crawler.dowload.impl.DownloadServer;
+import banana.dowloader.impl.DownloadServer;
 
 public class Command {
 

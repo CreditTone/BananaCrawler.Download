@@ -1,4 +1,4 @@
-package banana.crawler.dowload.processor;
+package banana.dowloader.processor;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -19,8 +19,8 @@ import banana.core.protocol.Task.BasicProcessor;
 import banana.core.request.HttpRequest;
 import banana.core.request.StartContext;
 import banana.core.response.Page;
-import banana.crawler.dowload.config.DataExtractorConfig;
-import banana.crawler.dowload.impl.DownloadServer;
+import banana.dowloader.config.DataExtractorConfig;
+import banana.dowloader.impl.DownloadServer;
 
 public class BasicPageProcessor implements PageProcessor {
 

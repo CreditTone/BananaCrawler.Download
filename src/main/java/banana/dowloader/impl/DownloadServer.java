@@ -1,4 +1,4 @@
-package banana.crawler.dowload.impl;
+package banana.dowloader.impl;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -33,7 +33,7 @@ import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Task;
 import banana.core.util.SystemUtil;
-import banana.crawler.dowload.processor.MongoDBDataProcessor;
+import banana.dowloader.processor.MongoDBDataProcessor;
 
 public final class DownloadServer implements DownloadProtocol {
 	/**

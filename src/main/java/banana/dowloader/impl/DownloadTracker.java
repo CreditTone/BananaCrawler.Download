@@ -1,4 +1,4 @@
-package banana.crawler.dowload.impl;
+package banana.dowloader.impl;
 
 import java.io.IOException;
 import java.net.URL;
@@ -31,9 +31,9 @@ import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
-import banana.crawler.dowload.processor.JSONConfigDownloadProcessor;
-import banana.crawler.dowload.processor.JSONConfigPageProcessor;
-import banana.crawler.dowload.processor.ProcessorForwarder;
+import banana.dowloader.processor.JSONConfigDownloadProcessor;
+import banana.dowloader.processor.JSONConfigPageProcessor;
+import banana.dowloader.processor.ProcessorForwarder;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
