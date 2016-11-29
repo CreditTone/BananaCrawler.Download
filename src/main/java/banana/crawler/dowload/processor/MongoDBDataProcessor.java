@@ -22,6 +22,9 @@ public class MongoDBDataProcessor implements DataProcessor {
 
 	@Override
 	public void process(List<CrawlData> objectContainer,String ... collection) {
+		if (objectContainer == null){
+			return;
+		}
 		if (!collections.contains(collection[0])){
 			if (!DownloadServer.getInstance().db.collectionExists(collection[0])){
 				synchronized (this) {

@@ -8,10 +8,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.ProtocolSignature;
 import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.ipc.RPC.Server;
 import org.apache.log4j.Logger;
 
 import com.mongodb.DB;
@@ -21,46 +23,49 @@ import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
 
 import banana.core.NodeStatus;
+import banana.core.exception.CrawlerMasterException;
 import banana.core.exception.DownloadException;
 import banana.core.modle.DownloaderConfig;
 import banana.core.modle.MasterConfig;
 import banana.core.processor.DataProcessor;
 import banana.core.processor.Extractor;
-import banana.core.protocol.CrawlerMasterProtocol;
+import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Task;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.processor.MongoDBDataProcessor;
 
-
-public final class DownloadServer implements DownloadProtocol{
+public final class DownloadServer implements DownloadProtocol {
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
-	
+
 	private static Logger logger = Logger.getLogger(DownloadServer.class);
-	
+
 	public DownloaderConfig config;
-	
-	private CrawlerMasterProtocol master = null;
-	
+
+	private MasterProtocol master = null;
+
+	private Server rpcServer;
+
 	public DB db;
 
 	public Extractor extractor;
-	
+
 	public DataProcessor dataProcessor;
-	
-	private Map<String,DownloadTracker> downloadInstance = new HashMap<String,DownloadTracker>();
-	
+
+	private Map<String, DownloadTracker> downloadInstance = new HashMap<String, DownloadTracker>();
+
 	private static DownloadServer instance = null;
-	
-	public static final DownloadServer getInstance(){
+
+	public static final DownloadServer getInstance() {
 		return instance;
 	}
-	
-	public DownloadServer(DownloaderConfig config)throws Exception{
-		master = (CrawlerMasterProtocol) RPC.getProxy(CrawlerMasterProtocol.class,CrawlerMasterProtocol.versionID,new InetSocketAddress(config.master.host,config.master.port),new Configuration());
+
+	public DownloadServer(DownloaderConfig config) throws Exception {
+		master = (MasterProtocol) RPC.getProxy(MasterProtocol.class, MasterProtocol.versionID,
+				new InetSocketAddress(config.master.host, config.master.port), new Configuration());
 		MasterConfig masterConfig = master.getMasterConfig();
 		dataProcessor = new MongoDBDataProcessor();
 		extractor = new JsonRpcExtractor(masterConfig.extractor);
@@ -71,56 +76,56 @@ public final class DownloadServer implements DownloadProtocol{
 		ServerAddress serverAddress = new ServerAddress(masterConfig.mongodb.host, masterConfig.mongodb.port);
 		List<ServerAddress> seeds = new ArrayList<ServerAddress>();
 		seeds.add(serverAddress);
-		MongoCredential credentials = MongoCredential.createCredential(masterConfig.mongodb.username, masterConfig.mongodb.db,
-				masterConfig.mongodb.password.toCharArray());
+		MongoCredential credentials = MongoCredential.createCredential(masterConfig.mongodb.username,
+				masterConfig.mongodb.db, masterConfig.mongodb.password.toCharArray());
 		client = new MongoClient(seeds, Arrays.asList(credentials), getOptions());
 		db = client.getDB(masterConfig.mongodb.db);
 	}
-	
+
 	@Override
-	public NodeStatus healthCheck(){
+	public NodeStatus healthCheck() {
 		return SystemUtil.getLocalNodeStatus();
 	}
-	
-	public CrawlerMasterProtocol getMasterServer(){
+
+	public MasterProtocol getMasterServer() {
 		return master;
 	}
-	
+
 	@Override
-	public boolean startDownloadTracker(String taskId,int thread,Task config) throws DownloadException{
+	public synchronized boolean startDownloadTracker(String taskId, int thread, Task config) throws DownloadException {
 		newDownloadTracker(taskId, thread, config);
 		DownloadTracker d = downloadInstance.get(taskId);
-		if (d == null){
+		if (d == null) {
 			throw new DownloadException(String.format("Can't find the downloader for Id %s", taskId));
-		}else if (d.isRuning()){
+		} else if (d.isRuning()) {
 			throw new DownloadException("Downloader is already running");
 		}
 		Thread fetchLinkThread = new Thread(d);
 		fetchLinkThread.start();
 		return true;
 	}
-	
+
 	@Override
 	public void resubmitTaskConfig(String taskId, int thread, Task config) throws DownloadException {
 		DownloadTracker d = downloadInstance.get(taskId);
-		if (d == null){
+		if (d == null) {
 			throw new DownloadException(String.format("Can't find the downloader for Id %s", taskId));
 		}
 		d.updateConfig(thread, config);
 	}
 
-	private void newDownloadTracker(String taskId, int thread,Task config) throws DownloadException{
-		if (downloadInstance.keySet().contains(taskId)){
+	private void newDownloadTracker(String taskId, int thread, Task config) throws DownloadException {
+		if (downloadInstance.keySet().contains(taskId)) {
 			throw new DownloadException("TaskTracker is already existed");
 		}
-		downloadInstance.put(taskId, new DownloadTracker(taskId,thread,config));
+		downloadInstance.put(taskId, new DownloadTracker(taskId, thread, config));
 		logger.info("Create a DownloadTracker under the task " + taskId);
 	}
-	
+
 	@Override
 	public void stopDownloadTracker(String taskId) throws DownloadException {
 		DownloadTracker d = downloadInstance.get(taskId);
-		if (d == null){
+		if (d == null) {
 			throw new DownloadException("Can't find the downloader");
 		}
 		d.stop();
@@ -135,18 +140,18 @@ public final class DownloadServer implements DownloadProtocol{
 	@Override
 	public ProtocolSignature getProtocolSignature(String protocol, long clientVersion, int clientMethodsHash)
 			throws IOException {
-		return new ProtocolSignature(DownloadProtocol.versionID,null);
+		return new ProtocolSignature(DownloadProtocol.versionID, null);
 	}
 
 	@Override
 	public boolean isWaitRequest(String taskId) throws DownloadException {
 		DownloadTracker d = downloadInstance.get(taskId);
-		if (d == null){
+		if (d == null) {
 			throw new DownloadException("Can't find the downloader");
 		}
 		return d.isWaitRequest();
 	}
-	
+
 	private MongoClientOptions getOptions() {
 		MongoClientOptions.Builder build = new MongoClientOptions.Builder();
 		// 与数据最大连接数50
@@ -158,6 +163,23 @@ public final class DownloadServer implements DownloadProtocol{
 		build.socketTimeout(60 * 1000);
 		MongoClientOptions options = build.build();
 		return options;
+	}
+
+	public synchronized void startDownloader()
+			throws HadoopIllegalArgumentException, IOException, CrawlerMasterException {
+		String localIp = SystemUtil.getLocalIP();
+		rpcServer = new RPC.Builder(new Configuration()).setProtocol(DownloadProtocol.class).setInstance(this)
+				.setBindAddress("0.0.0.0").setPort(config.listen).setNumHandlers(config.handlers).build();
+		rpcServer.start();
+		master.registerDownloadNode(localIp, config.listen);
+	}
+
+	@Override
+	public synchronized void stopDownloader() throws DownloadException {
+		for (String taskid : downloadInstance.keySet()) {
+			stopDownloadTracker(taskid);
+		}
+		new Thread(){public void run() {rpcServer.stop();}}.start();
 	}
 
 }

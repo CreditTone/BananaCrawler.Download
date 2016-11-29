@@ -18,7 +18,7 @@ import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
 import banana.core.processor.BinaryProcessor;
 import banana.core.processor.PageProcessor;
-import banana.core.protocol.CrawlerMasterProtocol;
+import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.Task;
 import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.request.BasicRequest;
@@ -213,7 +213,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	protected void handleResult(List<HttpRequest> newRequests, List<CrawlData> objectContainer) {
 		try {
-			CrawlerMasterProtocol master = DownloadServer.getInstance().getMasterServer();
+			MasterProtocol master = DownloadServer.getInstance().getMasterServer();
 			for (HttpRequest req : newRequests) {
 				master.pushTaskRequest(taskId, req);
 			}

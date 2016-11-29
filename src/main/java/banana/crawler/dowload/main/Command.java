@@ -19,7 +19,7 @@ import banana.core.protocol.DownloadProtocol;
 import banana.core.util.SystemUtil;
 import banana.crawler.dowload.impl.DownloadServer;
 
-public class StartDownloader {
+public class Command {
 
 	public static void main(String[] args) throws Exception {
 		args = (args == null || args.length == 0)?new String[]{}:args;
@@ -38,7 +38,7 @@ public class StartDownloader {
 			configFile = new File(commandLine.getOptionValue("c"));
 		}else if (!configFile.exists()){
 			try{
-				configFile = new File(StartDownloader.class.getClassLoader().getResource("").getPath() + "/downloader_config.json");
+				configFile = new File(Command.class.getClassLoader().getResource("").getPath() + "/downloader_config.json");
 			}catch(Exception e){
 				System.out.println("请指定配置文件位置");
 				System.exit(0);
@@ -46,11 +46,6 @@ public class StartDownloader {
 		}
 		DownloaderConfig config = JSON.parseObject(FileUtils.readFileToString(configFile),DownloaderConfig.class);
 		DownloadServer downloadServer = new DownloadServer(config);
-		String localIp = SystemUtil.getLocalIP();
-		Server server = new RPC.Builder(new Configuration()).setProtocol(DownloadProtocol.class)
-	               .setInstance(downloadServer).setBindAddress("0.0.0.0").setPort(config.listen)
-	               .setNumHandlers(config.handlers).build();
-	    server.start();
-	    downloadServer.getMasterServer().registerDownloadNode(localIp,config.listen);
+		downloadServer.startDownloader();
 	}
 }

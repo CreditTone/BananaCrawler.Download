@@ -79,7 +79,7 @@ public class BasicPageProcessor implements PageProcessor {
 		} else if (define != null) {
 			String content = extractor.parseData(define, page.getContent());
 			if (content == null) {
-				logger.warn(String.format("content prepare parse error %s", define));
+				logger.warn(String.format("content prepare error %s", define));
 				return null;
 			}
 			page.setContent(content);
