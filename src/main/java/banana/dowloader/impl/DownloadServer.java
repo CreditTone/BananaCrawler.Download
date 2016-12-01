@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
@@ -55,7 +56,7 @@ public final class DownloadServer implements DownloadProtocol {
 
 	public DataProcessor dataProcessor;
 
-	private Map<String, DownloadTracker> downloadInstance = new HashMap<String, DownloadTracker>();
+	private Map<String, DownloadTracker> downloadInstance = new ConcurrentHashMap<String, DownloadTracker>();
 
 	private static DownloadServer instance = null;
 
@@ -116,7 +117,7 @@ public final class DownloadServer implements DownloadProtocol {
 
 	private void newDownloadTracker(String taskId, int thread, Task config) throws DownloadException {
 		if (downloadInstance.keySet().contains(taskId)) {
-			throw new DownloadException("TaskTracker is already existed");
+			throw new DownloadException("DownloaderTracker is already existed");
 		}
 		downloadInstance.put(taskId, new DownloadTracker(taskId, thread, config));
 		logger.info("Create a DownloadTracker under the task " + taskId);
