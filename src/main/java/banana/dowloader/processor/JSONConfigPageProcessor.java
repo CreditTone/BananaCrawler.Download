@@ -203,7 +203,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	private List<HttpRequest> createRequest(RuntimeContext runtimeContext,RequestExtractorConfig requestExtractorConfig,JSON data) throws IOException{
 		if (data instanceof JSONObject){
 			JSONObject dataObj = (JSONObject) data;
-			if (dataObj.getString("url") == null && dataObj.getString("download") == null){
+			if (dataObj.getString("url") == null && dataObj.getString("download") == null) {
 				return null;
 			}
 			HttpRequest req = null;
