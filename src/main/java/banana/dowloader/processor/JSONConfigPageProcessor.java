@@ -81,6 +81,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 					responseJson = extractor.parseData(dataExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
 						logger.info(String.format("parse data null %s", dataExtractorConfig.parseConfig));
+						continue;
 					}
 					JSON result = null;
 					if ((responseJson != null) && (responseJson.startsWith("{") || responseJson.startsWith("["))){

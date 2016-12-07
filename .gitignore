@@ -3,7 +3,7 @@
 .project
 .classpath
 .mygit
-log/
+logs/
 doc/
 project/
 *DS_Store

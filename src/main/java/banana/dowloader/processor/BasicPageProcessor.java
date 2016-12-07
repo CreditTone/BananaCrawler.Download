@@ -37,6 +37,8 @@ public class BasicPageProcessor implements PageProcessor {
 	protected Map<String, DataExtractorConfig> page_context_define;
 
 	protected Map<String, DataExtractorConfig> task_context_define;
+	
+	protected String[] logs;
 
 	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor) {
 		this.taskId = taskId;
@@ -63,12 +65,13 @@ public class BasicPageProcessor implements PageProcessor {
 				task_context_define.put(entry.getKey(), new DataExtractorConfig(entry.getValue()));
 			}
 		}
+		
+		this.logs = proConfig.logs;
 	}
 
 	@Override
 	public RuntimeContext process(Page page, StartContext context, List<HttpRequest> queue,
 			List<CrawlData> objectContainer) throws Exception {
-		RuntimeContext runtimeContext = RuntimeContext.create(page, context);
 		if (direct != null) {
 			String content = extractor.parseData(direct, page.getContent());
 			if (content == null) {
@@ -84,7 +87,7 @@ public class BasicPageProcessor implements PageProcessor {
 			}
 			page.setContent(content);
 		}
-
+		RuntimeContext runtimeContext = RuntimeContext.create(page, context);
 		if (page_context_define != null) {
 			for (Entry<String, DataExtractorConfig> entry : page_context_define.entrySet()) {
 				DataExtractorConfig dataExtratorConfig = entry.getValue();
@@ -106,6 +109,9 @@ public class BasicPageProcessor implements PageProcessor {
 					runtimeContext.put(entry.getKey(), value);
 				}
 			}
+		}
+		for (int i = 0; (logs != null && i < logs.length); i++) {
+			logger.info(runtimeContext.parse(logs[i]));
 		}
 		return runtimeContext;
 	}

@@ -66,6 +66,7 @@ public final class RuntimeContext implements ContextModle {
 	public static final RuntimeContext create(Page page,StartContext context){
 		RuntimeContext runtimeContext = RuntimeContext.create(page.getRequest(), context);
 		runtimeContext.put("_content", page.getContent());
+		runtimeContext.put("_status_code", page.getStatus());
 		return runtimeContext;
 	}
 	
