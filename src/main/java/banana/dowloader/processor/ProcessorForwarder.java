@@ -19,7 +19,7 @@ public class ProcessorForwarder extends BasicPageProcessor {
 	
 	public ProcessorForwarder(String taskId, banana.core.protocol.Task.ProcessorForwarder forwarderConfig,
 			DownloadTracker downloadTracker) {
-		super(taskId, forwarderConfig, DownloadServer.getInstance().extractor);
+		super(taskId, forwarderConfig, DownloadServer.getInstance().extractor,downloadTracker.getHttpDownloader());
 		this.downloadTracker = downloadTracker;
 		this.forwarderConfig = forwarderConfig;
 	}

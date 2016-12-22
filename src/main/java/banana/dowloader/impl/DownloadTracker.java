@@ -1,11 +1,9 @@
 package banana.dowloader.impl;
 
 import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -21,12 +19,11 @@ import banana.core.processor.PageProcessor;
 import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.Task;
 import banana.core.protocol.Task.DownloadProcessor;
-import banana.core.request.BasicRequest;
 import banana.core.request.BinaryRequest;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.PageRequest.PageEncoding;
-import banana.core.request.TransactionRequest;
+import banana.core.response.HttpResponse;
 import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.core.util.CountableThreadPool;
@@ -68,6 +65,10 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}
 	}
 	
+	public HttpDownloader getHttpDownloader() {
+		return httpDownloader;
+	}
+
 	public boolean isRuning() {
 		return runing;
 	}
@@ -82,51 +83,58 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		pageProcessors.clear();
 		logger.info(String.format("%s downloadTracker add %d thread", taskId, thread - downloadThreadPool.getThreadNum()));
 	}
+	
+	private final void asyncInvokeDownload(final HttpRequest request){
+		downloadThreadPool.execute(new Runnable() {
+			@Override
+			public void run() {
+				HttpResponse response = download(request);
+				if (response == null){
+					return;
+				}
+				if (request.getMethod() == HttpRequest.Method.POST){
+					logger.info(String.format("%s Post:%s StatusCode:%s", request.getUrl(), request.getParams(), response.getStatus()));
+				}else{
+					logger.info(String.format("%s StatusCode:%s", request.getUrl(), response.getStatus()));
+				}
+				if (response instanceof Page){
+					PageProcessor pageProcessor = findPageProcessor(request.getProcessor());
+					if(pageProcessor == null){
+						logger.warn("Not Found PageProcessor Name:" + request.getProcessor());
+						return;
+					}
+					processPage(pageProcessor, (Page) response);
+				}else{
+					BinaryProcessor binaryProcessor = findBinaryProcessor(request.getProcessor());
+					if(binaryProcessor == null){
+						logger.warn("Not Found BinaryProcessor Name:" + request.getProcessor());
+						return;
+					}
+					if (response.getStatus() == 200){
+						try {
+							binaryProcessor.process((StreamResponse)response);
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
+		});
+	}
 
-	private final boolean download(BasicRequest request){
+	private final HttpResponse download(HttpRequest request){
 		if (request instanceof PageRequest){
 			final PageRequest pageRequest = (PageRequest) request;
 			if(pageRequest.getPageEncoding()==null){
 				pageRequest.setPageEncoding(PageEncoding.UTF8);
 			}
-			PageProcessor pageProcessor = findPageProcessor(pageRequest.getProcessor());
-			if(pageProcessor == null){
-				logger.warn("Not Found PageProcessor Name:" + pageRequest.getProcessor());
-				return false;
-			}
 			Page page = httpDownloader.download(pageRequest);
-			if (page == null){
-				return false;
-			}
-			if (pageRequest.getMethod() == HttpRequest.Method.POST){
-				logger.info(String.format("%s Post:%s StatusCode:%s", pageRequest.getUrl(), pageRequest.getParams(), page.getStatus()));
-			}else{
-				logger.info(String.format("%s StatusCode:%s", pageRequest.getUrl(), page.getStatus()));
-			}
-			processPage(pageProcessor, page);
+			return page;
 		}else{
 			final BinaryRequest binaryRequest = (BinaryRequest) request;
-			BinaryProcessor binaryProcessor = findBinaryProcessor(binaryRequest.getProcessor());
-			if(binaryProcessor == null){
-				logger.warn("Not Found BinaryProcessor Name:" + binaryRequest.getProcessor());
-				return false;
-			}
 			StreamResponse stream = httpDownloader.downloadBinary(binaryRequest);
-			if (binaryRequest.getMethod() == HttpRequest.Method.POST){
-				logger.info(String.format("%s Post:%s StatusCode:%s", binaryRequest.getUrl(), binaryRequest.getParams(), stream.getStatus()));
-			}else{
-				logger.info(String.format("%s StatusCode:%s", binaryRequest.getUrl(), stream.getStatus()));
-			}
-			if (stream.getStatus() == 200){
-				try {
-					binaryProcessor.process(stream);
-				} catch (Exception e) {
-					e.printStackTrace();
-					logger.error("离线处理异常URL:"+binaryRequest.getUrl(),e);
-				}
-			}
+			return stream;
 		}
-		return true;
 	}
 	
 	private BinaryProcessor findBinaryProcessor(String processor) {
@@ -163,7 +171,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}
 		for (Task.Processor processorConfig : config.processors) {
 			if (processor.equals(processorConfig.index)){
-				pageProcessors.put(processor, new JSONConfigPageProcessor(taskId, processorConfig));
+				pageProcessors.put(processor, new JSONConfigPageProcessor(taskId, processorConfig,httpDownloader));
 				break;
 			}
 		}
@@ -179,7 +187,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	}
 	
 	/**
-	 * 离线处理
 	 * @param pageProcessor
 	 * @param page
 	 * @return
@@ -228,29 +235,20 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	}
 
 	public final HttpRequest pollRequest() throws CrawlerMasterException, InterruptedException {
+		while (runing) {
+			if(downloadThreadPool.getIdleThreadCount() > 0){
+				break;//有线程可以工作
+			}
+			Thread.sleep(10);
+		}
 		HttpRequest newReq = null;
 		while(newReq == null && runing){
 			newReq = DownloadServer.getInstance().getMasterServer().pollTaskRequest(taskId);
 			waitRequest = (newReq == null);
 		}
-		while (true) {
-			if(downloadThreadPool.getIdleThreadCount() >= 0){
-				break;//有线程可以工作
-			}
-			Thread.sleep(10);
-		}
 		return newReq;
 	}
 	
-	private final void asyncInvokeDownload(final BasicRequest request){
-		downloadThreadPool.execute(new Runnable() {
-			@Override
-			public void run() {
-				download(request);
-			}
-		});
-	}
-
 	@Override
 	public void run() {
 		logger.info("DownloadTracker Starting ");
@@ -272,6 +270,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}
 		release();
 	}
+	
 	
 	@Override
 	public void stop(){

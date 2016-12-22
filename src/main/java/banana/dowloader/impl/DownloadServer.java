@@ -4,14 +4,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.ProtocolSignature;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
@@ -33,6 +31,7 @@ import banana.core.processor.Extractor;
 import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.protocol.Task;
+import banana.core.request.Cookies;
 import banana.core.util.SystemUtil;
 import banana.dowloader.processor.MongoDBDataProcessor;
 
@@ -181,6 +180,15 @@ public final class DownloadServer implements DownloadProtocol {
 			stopDownloadTracker(taskid);
 		}
 		new Thread(){public void run() {rpcServer.stop();}}.start();
+	}
+
+	@Override
+	public void injectCookies(String taskId, Cookies cookies) throws DownloadException {
+		DownloadTracker d = downloadInstance.get(taskId);
+		if (d == null) {
+			throw new DownloadException("Can't find the downloader");
+		}
+		d.getHttpDownloader().injectCookies(cookies);
 	}
 
 }

@@ -17,6 +17,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 
+import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
 import banana.core.processor.Extractor;
 import banana.core.protocol.Task;
@@ -44,12 +45,12 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 	private RequestExtractorConfig[] requestParser;
 	
-	public JSONConfigPageProcessor(String taskId,Processor config){
-		this(taskId, config, DownloadServer.getInstance().extractor);
+	public JSONConfigPageProcessor(String taskId,Processor config,HttpDownloader downloader){
+		this(taskId, config, DownloadServer.getInstance().extractor,downloader);
 	}
 	
-	public JSONConfigPageProcessor(String taskId,Processor config,Extractor extractor) {
-		super(taskId, config, extractor);
+	public JSONConfigPageProcessor(String taskId,Processor config,Extractor extractor,HttpDownloader downloader) {
+		super(taskId, config, extractor,downloader);
 		if (config.crawler_data != null) {
 			dataParser = new DataExtractorConfig[config.crawler_data.length];
 			for (int i = 0 ;i < config.crawler_data.length ;i++) {

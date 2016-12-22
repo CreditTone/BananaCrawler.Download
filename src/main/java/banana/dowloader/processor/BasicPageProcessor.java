@@ -12,13 +12,18 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
+import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
+import banana.core.modle.MasterConfig;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task.BasicProcessor;
+import banana.core.protocol.Task.BasicProcessor.BlockCondition;
 import banana.core.request.HttpRequest;
 import banana.core.request.StartContext;
 import banana.core.response.Page;
+import banana.core.util.SimpleMailSender;
+import banana.core.util.SystemUtil;
 import banana.dowloader.config.DataExtractorConfig;
 import banana.dowloader.impl.DownloadServer;
 
@@ -27,6 +32,8 @@ public class BasicPageProcessor implements PageProcessor {
 	private static Logger logger = Logger.getLogger(BasicPageProcessor.class);
 
 	protected String taskId;
+	
+	protected HttpDownloader downloader;
 
 	protected Extractor extractor;
 
@@ -39,10 +46,13 @@ public class BasicPageProcessor implements PageProcessor {
 	protected Map<String, DataExtractorConfig> task_context_define;
 	
 	protected String[] logs;
+	
+	protected List<BlockCondition> blockConditions;
 
-	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor) {
+	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor,HttpDownloader downloader) {
 		this.taskId = taskId;
 		this.extractor = extractor;
+		this.downloader = downloader;
 		if (proConfig.content_prepare != null) {
 			if (proConfig.content_prepare.direct != null) {
 				direct = JSON.toJSONString(proConfig.content_prepare.direct);
@@ -67,6 +77,8 @@ public class BasicPageProcessor implements PageProcessor {
 		}
 		
 		this.logs = proConfig.logs;
+		
+		this.blockConditions = proConfig.blockConditions;
 	}
 
 	@Override
@@ -112,6 +124,21 @@ public class BasicPageProcessor implements PageProcessor {
 		}
 		for (int i = 0; (logs != null && i < logs.length); i++) {
 			logger.info(runtimeContext.parse(logs[i]));
+		}
+		
+		for (int i = 0; blockConditions != null && i < blockConditions.size(); i++) {
+			if (runtimeContext.parse(blockConditions.get(i).condition).equals("true")){
+				downloader.blockDriver(page.getDriverId());
+				if (blockConditions.get(i).email != null){
+					MasterConfig config = DownloadServer.getInstance().getMasterServer().getMasterConfig();
+					if (config.email != null){
+						SimpleMailSender sender = new SimpleMailSender(config.email.host, config.email.username, config.email.password);
+						String content = "downloader_node:" + SystemUtil.getLocalIP() + ":" + DownloadServer.getInstance().config.listen + "</br>taskid:" +taskId +"</br>driverId" + page.getDriverId();
+						sender.send(config.email.to, "CookieInvalid", content);
+					}
+				}
+				break;
+			}
 		}
 		return runtimeContext;
 	}
