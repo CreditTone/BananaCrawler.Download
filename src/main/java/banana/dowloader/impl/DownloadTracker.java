@@ -20,6 +20,7 @@ import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.Task;
 import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.request.BinaryRequest;
+import banana.core.request.Cookies;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.PageRequest.PageEncoding;
@@ -30,7 +31,6 @@ import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
 import banana.dowloader.processor.JSONConfigDownloadProcessor;
 import banana.dowloader.processor.JSONConfigPageProcessor;
-import banana.dowloader.processor.ProcessorForwarder;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
@@ -54,14 +54,14 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private CountableThreadPool downloadThreadPool;
 	
-	public DownloadTracker(String tId,int thread,Task taskConfig){
-		taskId = tId;
+	public DownloadTracker(String taskid,Task taskConfig,Cookies initCookies){
+		taskId = taskid;
 		config = taskConfig;
-		downloadThreadPool = new CountableThreadPool(thread);
+		downloadThreadPool = new CountableThreadPool(taskConfig.thread);
 		if (taskConfig.downloader.equals("default")){
-			httpDownloader = new DefaultHttpDownloader();
+			httpDownloader = new DefaultHttpDownloader(initCookies);
 		}else if (taskConfig.downloader.equals("phantomjs")){
-			httpDownloader = new PhantomJsDownloader(DownloadServer.getInstance().config.phantomjs);
+			httpDownloader = new PhantomJsDownloader(DownloadServer.getInstance().config.phantomjs, initCookies);
 		}
 	}
 	
@@ -163,15 +163,11 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		if(pageProcessors.get(processor) != null){
 			return pageProcessors.get(processor);
 		}
-		for (Task.ProcessorForwarder forwarderConfig : config.forwarders) {
-			if (processor.equals(forwarderConfig.index)){
-				pageProcessors.put(processor, new ProcessorForwarder(taskId, forwarderConfig, this));
-				break;
-			}
-		}
 		for (Task.Processor processorConfig : config.processors) {
 			if (processor.equals(processorConfig.index)){
-				pageProcessors.put(processor, new JSONConfigPageProcessor(taskId, processorConfig,httpDownloader));
+				JSONConfigPageProcessor processorInstance = new JSONConfigPageProcessor(taskId, processorConfig,httpDownloader);
+				processorInstance.setDownloadTracker(this);
+				pageProcessors.put(processor, processorInstance);
 				break;
 			}
 		}
@@ -204,7 +200,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				}
 				handleResult(newRequests,objectContainer);
 			} catch (Exception e) {
-				e.printStackTrace();
 				logger.error("离线处理异常URL:"+pr.getUrl(),e);
 			}
 		}else{

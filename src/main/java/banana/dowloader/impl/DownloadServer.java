@@ -92,8 +92,8 @@ public final class DownloadServer implements DownloadProtocol {
 	}
 
 	@Override
-	public synchronized boolean startDownloadTracker(String taskId, int thread, Task config) throws DownloadException {
-		newDownloadTracker(taskId, thread, config);
+	public synchronized boolean startDownloadTracker(String taskId,Task config,Cookies initCookie) throws DownloadException {
+		newDownloadTracker(taskId, config, initCookie);
 		DownloadTracker d = downloadInstance.get(taskId);
 		if (d == null) {
 			throw new DownloadException(String.format("Can't find the downloader for Id %s", taskId));
@@ -114,11 +114,11 @@ public final class DownloadServer implements DownloadProtocol {
 		d.updateConfig(thread, config);
 	}
 
-	private void newDownloadTracker(String taskId, int thread, Task config) throws DownloadException {
+	private void newDownloadTracker(String taskId, Task config,Cookies initCookie) throws DownloadException {
 		if (downloadInstance.keySet().contains(taskId)) {
 			throw new DownloadException("DownloaderTracker is already existed");
 		}
-		downloadInstance.put(taskId, new DownloadTracker(taskId, thread, config));
+		downloadInstance.put(taskId, new DownloadTracker(taskId, config,initCookie));
 		logger.info("Create a DownloadTracker under the task " + taskId);
 	}
 

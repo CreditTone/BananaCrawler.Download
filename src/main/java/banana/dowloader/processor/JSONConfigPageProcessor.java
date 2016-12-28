@@ -20,8 +20,10 @@ import com.mongodb.DBObject;
 import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
 import banana.core.processor.Extractor;
+import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task;
 import banana.core.protocol.Task.Processor;
+import banana.core.protocol.Task.Processor.Forwarder;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.RequestBuilder;
@@ -45,6 +47,8 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 	private RequestExtractorConfig[] requestParser;
 	
+	private Forwarder[] forwarders;
+	
 	public JSONConfigPageProcessor(String taskId,Processor config,HttpDownloader downloader){
 		this(taskId, config, DownloadServer.getInstance().extractor,downloader);
 	}
@@ -63,6 +67,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 				requestParser[i] = new RequestExtractorConfig(config.crawler_request[i]);
 			}
 		}
+		this.forwarders = config.forwarders;
 	}
 	
 
@@ -154,6 +159,16 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 								queue.addAll(resps);
 							}
 						}
+					}
+				}
+			}
+		}
+		if (forwarders != null){
+			for (Forwarder fwd : forwarders){
+				if (runtimeContext.parse(fwd.condition).equals("true")){
+					PageProcessor result = downloadTracker.findPageProcessor(fwd.processor);
+					if (result != null){
+						result.process(page, context, queue, objectContainer);
 					}
 				}
 			}

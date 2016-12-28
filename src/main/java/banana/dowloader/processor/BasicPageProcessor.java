@@ -1,6 +1,7 @@
 package banana.dowloader.processor;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import banana.core.util.SimpleMailSender;
 import banana.core.util.SystemUtil;
 import banana.dowloader.config.DataExtractorConfig;
 import banana.dowloader.impl.DownloadServer;
+import banana.dowloader.impl.DownloadTracker;
 
 public class BasicPageProcessor implements PageProcessor {
 
@@ -37,9 +39,7 @@ public class BasicPageProcessor implements PageProcessor {
 
 	protected Extractor extractor;
 
-	protected String direct;
-
-	protected String define;
+	protected String content_prepare;
 
 	protected Map<String, DataExtractorConfig> page_context_define;
 
@@ -48,17 +48,20 @@ public class BasicPageProcessor implements PageProcessor {
 	protected String[] logs;
 	
 	protected List<BlockCondition> blockConditions;
+	
+	protected DownloadTracker downloadTracker;
 
 	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor,HttpDownloader downloader) {
 		this.taskId = taskId;
 		this.extractor = extractor;
 		this.downloader = downloader;
 		if (proConfig.content_prepare != null) {
-			if (proConfig.content_prepare.direct != null) {
-				direct = JSON.toJSONString(proConfig.content_prepare.direct);
-			}
-			if (proConfig.content_prepare.define != null) {
-				define = JSON.toJSONString(proConfig.content_prepare.define);
+			if (proConfig.content_prepare instanceof String){
+				content_prepare = JSON.toJSONString(Arrays.asList(proConfig.content_prepare));
+			}else if (proConfig.content_prepare instanceof List){
+				content_prepare = JSON.toJSONString(proConfig.content_prepare);
+			}else if (proConfig.content_prepare instanceof Map){
+				content_prepare = JSON.toJSONString(proConfig.content_prepare);
 			}
 		}
 
@@ -84,17 +87,16 @@ public class BasicPageProcessor implements PageProcessor {
 	@Override
 	public RuntimeContext process(Page page, StartContext context, List<HttpRequest> queue,
 			List<CrawlData> objectContainer) throws Exception {
-		if (direct != null) {
-			String content = extractor.parseData(direct, page.getContent());
+		if (content_prepare != null) {
+			String content = extractor.parseData(content_prepare, page.getContent());
 			if (content == null) {
-				logger.warn(String.format("content prepare error %s", direct));
-				return null;
-			}
-			page.setContent(content);
-		} else if (define != null) {
-			String content = extractor.parseData(define, page.getContent());
-			if (content == null) {
-				logger.warn(String.format("content prepare error %s", define));
+				logger.warn(String.format("content prepare error %s", content_prepare));
+				if (logs != null){
+					RuntimeContext runtimeContext = RuntimeContext.create(page, context);
+					for (int i = 0; i < logs.length; i++) {
+						logger.info(runtimeContext.parse(logs[i]));
+					}
+				}
 				return null;
 			}
 			page.setContent(content);
@@ -125,7 +127,6 @@ public class BasicPageProcessor implements PageProcessor {
 		for (int i = 0; (logs != null && i < logs.length); i++) {
 			logger.info(runtimeContext.parse(logs[i]));
 		}
-		
 		for (int i = 0; blockConditions != null && i < blockConditions.size(); i++) {
 			if (runtimeContext.parse(blockConditions.get(i).condition).equals("true")){
 				downloader.blockDriver(page.getDriverId());
@@ -190,6 +191,14 @@ public class BasicPageProcessor implements PageProcessor {
 			}
 			return ret;
 		}
+	}
+
+	public DownloadTracker getDownloadTracker() {
+		return downloadTracker;
+	}
+
+	public void setDownloadTracker(DownloadTracker downloadTracker) {
+		this.downloadTracker = downloadTracker;
 	}
 
 }
