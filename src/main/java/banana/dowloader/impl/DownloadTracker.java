@@ -11,6 +11,7 @@ import org.apache.log4j.Logger;
 
 import banana.core.download.HttpDownloader;
 import banana.core.download.impl.DefaultHttpDownloader;
+import banana.core.download.impl.HtmlUnitDownloader;
 import banana.core.download.impl.PhantomJsDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.CrawlData;
@@ -62,6 +63,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			httpDownloader = new DefaultHttpDownloader(initCookies);
 		}else if (taskConfig.downloader.equals("phantomjs")){
 			httpDownloader = new PhantomJsDownloader(DownloadServer.getInstance().config.phantomjs, initCookies);
+		}else if (taskConfig.downloader.equals("htmlunit")){
+			httpDownloader = new HtmlUnitDownloader(initCookies);
 		}
 	}
 	
