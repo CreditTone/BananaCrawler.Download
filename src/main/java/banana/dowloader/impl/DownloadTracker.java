@@ -14,7 +14,9 @@ import banana.core.download.impl.DefaultHttpDownloader;
 import banana.core.download.impl.HtmlUnitDownloader;
 import banana.core.download.impl.PhantomJsDownloader;
 import banana.core.exception.CrawlerMasterException;
+import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
+import banana.core.modle.TaskError;
 import banana.core.processor.BinaryProcessor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.MasterProtocol;
@@ -193,16 +195,22 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	private final void processPage(final PageProcessor pageProcessor ,final Page page){
 		int ret = page.getStatus() / 100;
 		PageRequest pr = (PageRequest) page.getRequest();
+		ContextModle runtimeContext = null;
 		if (ret == 2){
 			try {
 				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
-			    pageProcessor.process(page,null,newRequests,objectContainer);
+				runtimeContext = pageProcessor.process(page,null,newRequests,objectContainer);
 			    for (HttpRequest request : newRequests) {
 					request.baseRequest(page.getRequest());
 				}
 				handleResult(newRequests,objectContainer);
 			} catch (Exception e) {
+				TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, e);
+				runtimeContext.copyTo(taskError.runtimeContext);
+				try {
+					DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
+				} catch (Exception e1) {}
 				logger.error("离线处理异常URL:"+pr.getUrl(),e);
 			}
 		}else{

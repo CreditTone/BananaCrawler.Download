@@ -7,10 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.http.NameValuePair;
 
-import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.Template;
@@ -128,6 +126,18 @@ public final class RuntimeContext implements ContextModle {
 	
 	public void setDataContextNull(){
 		this.dataContext = null;
+	}
+	
+	public void copyTo(Map<String,Object> dst){
+		if (this.dataContext != null){
+			dst.putAll(dataContext);
+		}
+		if (this.pageContext != null){
+			dst.putAll(pageContext);
+		}
+		if (this.requestAttribute != null){
+			dst.putAll(requestAttribute);
+		}
 	}
 	
 	@Override

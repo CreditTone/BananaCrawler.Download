@@ -19,6 +19,7 @@ import com.mongodb.DBObject;
 
 import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
+import banana.core.modle.TaskError;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task;
@@ -86,7 +87,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 				if (dataExtractorConfig.condition == null || runtimeContext.parse(dataExtractorConfig.condition).equals("true")){
 					responseJson = extractor.parseData(dataExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
-						logger.info(String.format("parse data null %s", dataExtractorConfig.parseConfig));
+						logger.info(String.format("parsed data is null %s", dataExtractorConfig.parseConfig));
 						continue;
 					}
 					JSON result = null;
@@ -169,9 +170,13 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 					PageProcessor result = downloadTracker.findPageProcessor(fwd.processor);
 					if (result != null){
 						result.process(page, context, queue, objectContainer);
+						return runtimeContext;
 					}
 				}
 			}
+			TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.FORWORD_ERROR_TYPE, new Exception("no forword on index " + index));
+			runtimeContext.copyTo(taskError.runtimeContext);
+			DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
 		}
 		return runtimeContext;
 	}

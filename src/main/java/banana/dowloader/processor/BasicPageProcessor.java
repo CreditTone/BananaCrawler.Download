@@ -32,6 +32,8 @@ import banana.dowloader.impl.DownloadTracker;
 public class BasicPageProcessor implements PageProcessor {
 
 	private static Logger logger = Logger.getLogger(BasicPageProcessor.class);
+	
+	protected String index;
 
 	protected String taskId;
 	
@@ -52,6 +54,7 @@ public class BasicPageProcessor implements PageProcessor {
 	protected DownloadTracker downloadTracker;
 
 	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor,HttpDownloader downloader) {
+		this.index = proConfig.index;
 		this.taskId = taskId;
 		this.extractor = extractor;
 		this.downloader = downloader;
