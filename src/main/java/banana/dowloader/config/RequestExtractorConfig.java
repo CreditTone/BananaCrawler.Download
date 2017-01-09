@@ -65,7 +65,7 @@ public class RequestExtractorConfig {
 		Map<String,Object> bodyConfig = new HashMap<String,Object>();
 		String urlXpath = (String) config.get("url");
 		if (urlXpath != null){
-			if (urlXpath.contains("{{")){
+			if (urlXpath.startsWith("http") || urlXpath.contains("{{")){
 				templates.put("url", urlXpath);
 			}else{
 				bodyConfig.put("url", urlXpath);

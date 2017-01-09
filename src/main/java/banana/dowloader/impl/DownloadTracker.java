@@ -89,7 +89,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		logger.info(String.format("%s downloadTracker add %d thread", taskId, thread - downloadThreadPool.getThreadNum()));
 	}
 	
-	private final void asyncInvokeDownload(final HttpRequest request){
+	private final void asyncInvokeDownload(final HttpRequest request) {
 		downloadThreadPool.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -192,7 +192,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	 * @param page
 	 * @return
 	 */
-	private final void processPage(final PageProcessor pageProcessor ,final Page page){
+	private final void processPage(final PageProcessor pageProcessor ,final Page page) {
 		int ret = page.getStatus() / 100;
 		PageRequest pr = (PageRequest) page.getRequest();
 		ContextModle runtimeContext = null;
@@ -207,11 +207,14 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				handleResult(newRequests,objectContainer);
 			} catch (Exception e) {
 				TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, e);
-				runtimeContext.copyTo(taskError.runtimeContext);
+				if (runtimeContext != null){
+					runtimeContext.copyTo(taskError.runtimeContext);
+				}
 				try {
 					DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
 				} catch (Exception e1) {}
 				logger.error("离线处理异常URL:"+pr.getUrl(),e);
+				logger.error("离线处理异常Content:"+page.getContent());
 			}
 		}else{
 			if(page.getRequest().getHistoryCount() < 3){

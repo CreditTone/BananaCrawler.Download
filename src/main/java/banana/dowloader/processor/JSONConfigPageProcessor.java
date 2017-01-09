@@ -22,7 +22,6 @@ import banana.core.modle.CrawlData;
 import banana.core.modle.TaskError;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
-import banana.core.protocol.Task;
 import banana.core.protocol.Task.Processor;
 import banana.core.protocol.Task.Processor.Forwarder;
 import banana.core.request.HttpRequest;
@@ -108,7 +107,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			}
 		}
 		
-		if (requestParser != null){
+		if (requestParser != null) {
 			for (int i = 0; i < requestParser.length; i++) {
 				RequestExtractorConfig requestExtractorConfig = requestParser[i];
 				if (requestExtractorConfig.dataContext != null){
