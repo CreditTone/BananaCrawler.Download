@@ -77,43 +77,43 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		if (runtimeContext == null){
 			return null;
 		}
+		boolean parseable = !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false);
 		String responseJson = null;
 		PageRequest currentPageReq = (PageRequest) page.getRequest();
 		if (dataParser != null){
 			for (int i = 0; i < dataParser.length; i++) {
 				DataExtractorConfig dataExtractorConfig = dataParser[i];
 				JSONObject _data = (JSONObject) currentPageReq.getAttribute("_data");
-				if (dataExtractorConfig.condition == null || runtimeContext.parse(dataExtractorConfig.condition).equals("true")){
+				JSON result = null;
+				if (parseable && (dataExtractorConfig.condition == null || runtimeContext.parseString(dataExtractorConfig.condition).equals("true"))){
 					responseJson = extractor.parseData(dataExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
 						logger.info(String.format("parsed data is null %s", dataExtractorConfig.parseConfig));
 						continue;
 					}
-					JSON result = null;
 					if ((responseJson != null) && (responseJson.startsWith("{") || responseJson.startsWith("["))){
 						result = (JSON) JSON.parse(responseJson);
-						writeTemplates(result, runtimeContext, dataExtractorConfig.templates);
-						copy(_data, result);
-					}else{
-						result = _data;
-					}
-					if (dataExtractorConfig.unique != null){
-						result = filter(result, dataExtractorConfig.unique);
-					}
-					if (result != null){
-						writeObject(runtimeContext, objectContainer, page.getRequest().getUrl(), result, dataExtractorConfig.update);
 					}
 				}
+				if (result == null){
+					result = new JSONObject();
+				}
+				merger(_data, result);
+				writeTemplates(result, runtimeContext, dataExtractorConfig.templates);
+				if (dataExtractorConfig.unique != null){
+					result = filter(result, dataExtractorConfig.unique);
+				}
+				writeObject(runtimeContext, objectContainer, page.getRequest().getUrl(), result, dataExtractorConfig.update);
 			}
 		}
 		
-		if (requestParser != null) {
+		if (requestParser != null && parseable) {
 			for (int i = 0; i < requestParser.length; i++) {
 				RequestExtractorConfig requestExtractorConfig = requestParser[i];
 				if (requestExtractorConfig.dataContext != null){
 					JSON contextData = (JSON) runtimeContext.get(requestExtractorConfig.dataContext.key);
 					if (contextData != null){
-						if (contextData instanceof JSONObject && (requestExtractorConfig.condition == null || runtimeContext.parse(requestExtractorConfig.condition,(Map<String, Object>) contextData).equals("true"))) {
+						if (contextData instanceof JSONObject && (requestExtractorConfig.condition == null || runtimeContext.parseString(requestExtractorConfig.condition,(Map<String, Object>) contextData).equals("true"))) {
 							JSONArray temp = new JSONArray();
 							temp.add(contextData);
 							contextData = temp;
@@ -122,7 +122,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 							JSONArray requestDataArr = (JSONArray) contextData;
 							for (int j = 0; j < requestDataArr.size(); j++) {
 								runtimeContext.setDataContext((Map)requestDataArr.get(j));
-								if (requestExtractorConfig.condition == null || runtimeContext.parse(requestExtractorConfig.condition).equals("true")){
+								if (requestExtractorConfig.condition == null || runtimeContext.parseString(requestExtractorConfig.condition).equals("true")){
 									JSONObject jsonObject = new JSONObject();
 									writeTemplates(jsonObject, runtimeContext, requestExtractorConfig.templates);
 									if (requestExtractorConfig.unique != null){
@@ -142,7 +142,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 							}
 						}
 					}
-				}else if (requestExtractorConfig.condition == null || runtimeContext.parse(requestExtractorConfig.condition).equals("true")){
+				}else if (requestExtractorConfig.condition == null || runtimeContext.parseString(requestExtractorConfig.condition).equals("true")){
 					responseJson = extractor.parseData(requestExtractorConfig.parseConfig, page.getContent());
 					if (responseJson == null){
 						continue;
@@ -163,9 +163,9 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 				}
 			}
 		}
-		if (forwarders != null){
+		if (forwarders != null && parseable){
 			for (Forwarder fwd : forwarders){
-				if (runtimeContext.parse(fwd.condition).equals("true")){
+				if (runtimeContext.parseString(fwd.condition).equals("true")){
 					PageProcessor result = downloadTracker.findPageProcessor(fwd.processor);
 					if (result != null){
 						result.process(page, context, queue, objectContainer);
@@ -186,7 +186,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		}
 		BasicDBObject dbObject = new BasicDBObject();
 		for (Entry<String,String> entry : update.entrySet()) {
-			dbObject.put(entry.getKey(), runtimeContext.parse(entry.getValue()));
+			dbObject.put(entry.getKey(), runtimeContext.parseString(entry.getValue()));
 		}
 		return dbObject;
 	}
@@ -198,15 +198,19 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			JSONArray dataArr  = (JSONArray) data;
 			for (int i = 0; i < dataArr.size(); i++) {
 				Map<String,Object> map = fixData(dataArr.getJSONObject(i));
+				if (!map.isEmpty()){
+					body = new BasicDBObject(map);
+					updateQuery = buildUpdateQuery(update, runtimeContext);
+					objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
+				}
+			}
+		}else{
+			Map<String, Object> map = fixData((JSONObject) data);
+			if (!map.isEmpty()){
 				body = new BasicDBObject(map);
 				updateQuery = buildUpdateQuery(update, runtimeContext);
 				objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
 			}
-		}else{
-			Map<String, Object> map = fixData((JSONObject) data);
-			body = new BasicDBObject(map);
-			updateQuery = buildUpdateQuery(update, runtimeContext);
-			objectContainer.add(new CrawlData(taskId, url, body, updateQuery));
 		}
 	}
 
@@ -236,25 +240,30 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			if (dataObj.containsKey("attribute")){
 				Map<String,Object> attribute = (Map<String, Object>) dataObj.get("attribute");
 				for (Entry<String, Object> pair:attribute.entrySet()) {
-					String value = (String) pair.getValue();
-					if (value == null || (value = value.trim()).isEmpty()){
+					Object value = pair.getValue();
+					if (value == null) {
 						logger.warn(String.format("extractor attr error %s",req.getUrl()));
 						return null;
+					}else if (value instanceof String) {
+						String strValue = (String)value;
+						if ((strValue = strValue.trim()).isEmpty()){
+							return null;
+						}
 					}
-					req.addAttribute(pair.getKey(), pair.getValue());
+					req.addAttribute(pair.getKey(), value);
 				}
 			}
 			req.setMethod(requestExtractorConfig.method);
 			if (requestExtractorConfig.headers != null){
 				for(Entry<String, String> pair : requestExtractorConfig.headers.entrySet()){
 					String value = pair.getValue();
-					req.putHeader(pair.getKey(), runtimeContext.parse(value));
+					req.putHeader(pair.getKey(), runtimeContext.parseString(value));
 				}
 			}
 			if (requestExtractorConfig.params != null){
 				for(Entry<String, String> pair : requestExtractorConfig.params.entrySet()){
 					String value = pair.getValue();
-					req.putParams(pair.getKey(), runtimeContext.parse(value));
+					req.putParams(pair.getKey(), runtimeContext.parseString(value));
 				}
 			}
 			req.setPriority(requestExtractorConfig.priority);
@@ -272,8 +281,8 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 		}
 	}
 	
-	private final static void copy(JSONObject from,JSON to){
-		if (from != null){
+	private final static void merger(JSONObject from,JSON to){
+		if (from != null && from != to){
 			if (to instanceof JSONObject){
 				JSONObject dest = (JSONObject) to;
 				for (Entry<String,Object> entry : from.entrySet()) {
@@ -285,7 +294,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 			}else{
 				JSONArray destArr = (JSONArray) to;
 				for (int i = 0; i < destArr.size(); i++) {
-					copy(from, destArr.getJSONObject(i));
+					merger(from, destArr.getJSONObject(i));
 				}
 			}
 		}

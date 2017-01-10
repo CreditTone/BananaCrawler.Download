@@ -33,6 +33,8 @@ public class BasicPageProcessor implements PageProcessor {
 
 	private static Logger logger = Logger.getLogger(BasicPageProcessor.class);
 	
+	public static final String PRO_RUNTIME_PREPARED_ERROR = "PRO_RUNTIME_PREPARED_ERROR";
+	
 	protected String index;
 
 	protected String taskId;
@@ -52,12 +54,15 @@ public class BasicPageProcessor implements PageProcessor {
 	protected List<BlockCondition> blockConditions;
 	
 	protected DownloadTracker downloadTracker;
+	
+	protected boolean keep_down;
 
 	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor,HttpDownloader downloader) {
 		this.index = proConfig.index;
 		this.taskId = taskId;
 		this.extractor = extractor;
 		this.downloader = downloader;
+		this.keep_down = proConfig.keep_down;
 		if (proConfig.content_prepare != null) {
 			if (proConfig.content_prepare instanceof String){
 				content_prepare = JSON.toJSONString(Arrays.asList(proConfig.content_prepare));
@@ -90,22 +95,27 @@ public class BasicPageProcessor implements PageProcessor {
 	@Override
 	public RuntimeContext process(Page page, StartContext context, List<HttpRequest> queue,
 			List<CrawlData> objectContainer) throws Exception {
+		RuntimeContext runtimeContext = null;
 		if (content_prepare != null) {
 			String content = extractor.parseData(content_prepare, page.getContent());
 			if (content == null) {
+				runtimeContext = RuntimeContext.create(page, context);
 				logger.warn(String.format("content prepare error %s", content_prepare));
 				if (logs != null){
-					RuntimeContext runtimeContext = RuntimeContext.create(page, context);
 					for (int i = 0; i < logs.length; i++) {
-						logger.info(runtimeContext.parse(logs[i]));
+						logger.info(runtimeContext.parseString(logs[i]));
 					}
 				}
-				return null;
+				if (!keep_down){
+					return null;
+				}
+				runtimeContext.put(PRO_RUNTIME_PREPARED_ERROR, true);
+			}else{
+				page.setContent(content);
 			}
-			page.setContent(content);
 		}
-		RuntimeContext runtimeContext = RuntimeContext.create(page, context);
-		if (page_context_define != null) {
+		runtimeContext = runtimeContext == null?RuntimeContext.create(page, context):runtimeContext;
+		if (page_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
 			for (Entry<String, DataExtractorConfig> entry : page_context_define.entrySet()) {
 				DataExtractorConfig dataExtratorConfig = entry.getValue();
 				String value = extractor.parseData(dataExtratorConfig.parseConfig, page.getContent());
@@ -128,10 +138,10 @@ public class BasicPageProcessor implements PageProcessor {
 			}
 		}
 		for (int i = 0; (logs != null && i < logs.length); i++) {
-			logger.info(runtimeContext.parse(logs[i]));
+			logger.info(runtimeContext.parseString(logs[i]));
 		}
 		for (int i = 0; blockConditions != null && i < blockConditions.size(); i++) {
-			if (runtimeContext.parse(blockConditions.get(i).condition).equals("true")){
+			if (runtimeContext.parseString(blockConditions.get(i).condition).equals("true")){
 				downloader.blockDriver(page.getDriverId());
 				if (blockConditions.get(i).email != null){
 					MasterConfig config = DownloadServer.getInstance().getMasterServer().getMasterConfig();
@@ -155,8 +165,8 @@ public class BasicPageProcessor implements PageProcessor {
 		if (src instanceof JSONObject) {
 			JSONObject data = (JSONObject) src;
 			for (Entry<String, String> entry : templates.entrySet()) {
-				String result = context.parse(entry.getValue());
-				if (!result.isEmpty()) {
+				Object result = context.parseObject(entry.getValue());
+				if (result != null) {
 					data.put(entry.getKey(), result);
 					continue;
 				}

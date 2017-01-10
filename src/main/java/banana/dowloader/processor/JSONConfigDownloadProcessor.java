@@ -29,14 +29,14 @@ public class JSONConfigDownloadProcessor implements BinaryProcessor {
 		RuntimeContext runtimeContext = RuntimeContext.create(stream.getRequest(), null);
 		for (Map<String,String> fileConfig : config.files) {
 			String filename = fileConfig.get("filename");
-			filename = runtimeContext.parse(filename);
+			filename = runtimeContext.parseString(filename);
 			String contentType = fileConfig.get("contentType");
 			if (contentType != null){
-				contentType = runtimeContext.parse(contentType);
+				contentType = runtimeContext.parseString(contentType);
 			}
 			String aliases = fileConfig.get("aliases");
 			if (aliases != null){
-				aliases = runtimeContext.parse(aliases);
+				aliases = runtimeContext.parseString(aliases);
 			}
 			GridFSInputFile file = tracker_status.createFile(stream.getBody());
 			file.setFilename(filename);

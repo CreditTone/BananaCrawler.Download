@@ -1,6 +1,7 @@
 package banana.dowloader.processor;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -105,11 +106,27 @@ public final class RuntimeContext implements ContextModle {
 		return false;
 	}
 	
-	public String parse(String line) throws IOException {
-		return parse(line, null);
+	public Object parseObject(String line) throws IOException {
+		return parseObject(line, null);
 	}
 
-	public String parse(String line, Map<String, Object> tempDataContext) throws IOException {
+	public Object parseObject(String line, Map<String, Object> tempDataContext) throws IOException {
+		if (line.startsWith("{{") && line.endsWith("}}")){
+			return get(line.substring(2, line.length() -2));
+		}
+		return parseString(line, tempDataContext);
+	}
+	
+	@Override
+	public String parseString(String line) throws IOException {
+		if (!line.contains("{{")){
+			return line;
+		}
+		Template template = handlebars.compileEscapeInline(line);
+		return template.apply(this);
+	}
+	
+	public Object parseString(String line, Map<String, Object> tempDataContext) throws IOException {
 		if (!line.contains("{{")){
 			return line;
 		}
@@ -117,8 +134,7 @@ public final class RuntimeContext implements ContextModle {
 		if (tempDataContext != null){
 			setDataContext(tempDataContext);
 		}
-		String ret = template.apply(this);
-		return ret;
+		return template.apply(this);
 	}
 	
 	public void setDataContext(Map<String, Object> dataContext){
@@ -177,6 +193,11 @@ public final class RuntimeContext implements ContextModle {
 		return pageContext.get(key);
 	}
 
+	public <T> T get(Object key, T defaultValue) {
+		T value = (T) get(key);
+		return value == null?defaultValue:value;
+	}
+
 	@Override
 	public Object put(String key, Object value) {
 		return pageContext.put(key, value);
@@ -211,4 +232,5 @@ public final class RuntimeContext implements ContextModle {
 	public Set<java.util.Map.Entry<String, Object>> entrySet() {
 		throw new UnsupportedOperationException();
 	}
+
 }
