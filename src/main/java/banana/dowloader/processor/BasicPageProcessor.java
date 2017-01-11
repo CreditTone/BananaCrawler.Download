@@ -16,12 +16,12 @@ import com.alibaba.fastjson.JSONObject;
 import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
 import banana.core.modle.MasterConfig;
+import banana.core.modle.TaskContext;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task.BasicProcessor;
 import banana.core.protocol.Task.BasicProcessor.BlockCondition;
 import banana.core.request.HttpRequest;
-import banana.core.request.StartContext;
 import banana.core.response.Page;
 import banana.core.util.SimpleMailSender;
 import banana.core.util.SystemUtil;
@@ -93,7 +93,7 @@ public class BasicPageProcessor implements PageProcessor {
 	}
 
 	@Override
-	public RuntimeContext process(Page page, StartContext context, List<HttpRequest> queue,
+	public RuntimeContext process(Page page, TaskContext context, List<HttpRequest> queue,
 			List<CrawlData> objectContainer) throws Exception {
 		RuntimeContext runtimeContext = null;
 		if (content_prepare != null) {

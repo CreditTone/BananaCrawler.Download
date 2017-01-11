@@ -19,6 +19,7 @@ import com.mongodb.DBObject;
 
 import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
+import banana.core.modle.TaskContext;
 import banana.core.modle.TaskError;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
@@ -27,7 +28,6 @@ import banana.core.protocol.Task.Processor.Forwarder;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.RequestBuilder;
-import banana.core.request.StartContext;
 import banana.core.response.Page;
 import banana.dowloader.config.DataExtractorConfig;
 import banana.dowloader.config.RequestExtractorConfig;
@@ -72,7 +72,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 
 	@Override
-	public RuntimeContext process(Page page, StartContext context, List<HttpRequest> queue, List<CrawlData> objectContainer) throws Exception {
+	public RuntimeContext process(Page page, TaskContext context, List<HttpRequest> queue, List<CrawlData> objectContainer) throws Exception {
 		RuntimeContext runtimeContext = super.process(page, context, queue, objectContainer);
 		if (runtimeContext == null){
 			return null;

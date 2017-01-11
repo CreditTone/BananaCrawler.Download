@@ -16,6 +16,7 @@ import banana.core.download.impl.PhantomJsDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
+import banana.core.modle.TaskContext;
 import banana.core.modle.TaskError;
 import banana.core.processor.BinaryProcessor;
 import banana.core.processor.PageProcessor;
@@ -57,6 +58,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private CountableThreadPool downloadThreadPool;
 	
+	private TaskContext taskContext;
+	
 	public DownloadTracker(String taskid,Task taskConfig,Cookies initCookies){
 		taskId = taskid;
 		config = taskConfig;
@@ -68,6 +71,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}else if (taskConfig.downloader.equals("htmlunit")){
 			httpDownloader = new HtmlUnitDownloader(initCookies);
 		}
+		taskContext = new RemoteTaskContext(taskId);
 	}
 	
 	public HttpDownloader getHttpDownloader() {
@@ -200,7 +204,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			try {
 				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
-				runtimeContext = pageProcessor.process(page,null,newRequests,objectContainer);
+				runtimeContext = pageProcessor.process(page,taskContext,newRequests,objectContainer);
 			    for (HttpRequest request : newRequests) {
 					request.baseRequest(page.getRequest());
 				}

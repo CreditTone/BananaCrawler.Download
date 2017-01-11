@@ -16,8 +16,8 @@ import com.github.jknack.handlebars.Template;
 
 import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
+import banana.core.modle.TaskContext;
 import banana.core.request.HttpRequest;
-import banana.core.request.StartContext;
 import banana.core.response.Page;
 
 public final class RuntimeContext implements ContextModle {
@@ -55,6 +55,8 @@ public final class RuntimeContext implements ContextModle {
 			}
 		});
 	}
+	
+	private TaskContext taskContext;
 
 	private Map<String, Object> requestAttribute;
 
@@ -62,7 +64,7 @@ public final class RuntimeContext implements ContextModle {
 	
 	private Map<String, Object> dataContext;
 	
-	public static final RuntimeContext create(Page page,StartContext context){
+	public static final RuntimeContext create(Page page,TaskContext context){
 		RuntimeContext runtimeContext = RuntimeContext.create(page.getRequest(), context);
 		runtimeContext.put("_owner_url", page.getOwnerUrl());
 		runtimeContext.put("_content", page.getContent());
@@ -70,20 +72,21 @@ public final class RuntimeContext implements ContextModle {
 		return runtimeContext;
 	}
 	
-	public static final RuntimeContext create(HttpRequest request,StartContext context){
+	public static final RuntimeContext create(HttpRequest request,TaskContext context){
 		Map<String,Object> pageContext = new HashMap<String,Object>();
 		pageContext.put("_url", request.getUrl());
 		List<NameValuePair> pair = request.getNameValuePairs();
 		for (NameValuePair pr : pair) {
 			pageContext.put(pr.getName(), pr.getValue());
 		}
-		RuntimeContext runtimeContext = new RuntimeContext(request.getAttributes(), pageContext);
+		RuntimeContext runtimeContext = new RuntimeContext(request.getAttributes(), pageContext, context);
 		return runtimeContext;
 	}
 
-	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext) {
+	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext,TaskContext taskContext) {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
+		this.taskContext = taskContext;
 	}
 	
 	public boolean existKey(String path) {
@@ -190,7 +193,11 @@ public final class RuntimeContext implements ContextModle {
 		if (value != null){
 			return value;
 		}
-		return pageContext.get(key);
+		value = pageContext.get(key);
+		if (value != null){
+			return value;
+		}
+		return taskContext.getContextAttribute((String) key);
 	}
 
 	public <T> T get(Object key, T defaultValue) {
