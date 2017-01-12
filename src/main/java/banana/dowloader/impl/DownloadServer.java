@@ -144,12 +144,12 @@ public final class DownloadServer implements DownloadProtocol {
 	}
 
 	@Override
-	public boolean isWaitRequest(String taskId) throws DownloadException {
+	public boolean isWorking(String taskId) throws DownloadException {
 		DownloadTracker d = downloadInstance.get(taskId);
 		if (d == null) {
 			throw new DownloadException("Can't find the downloader");
 		}
-		return d.isWaitRequest();
+		return d.isWorking();
 	}
 
 	private MongoClientOptions getOptions() {

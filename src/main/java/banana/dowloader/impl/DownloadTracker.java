@@ -48,8 +48,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private boolean stoped = false;
 	
-	private boolean waitRequest = false;
-	
 	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
 	
 	private Map<String,BinaryProcessor> binaryProcesors = new HashMap<String,BinaryProcessor>();
@@ -82,8 +80,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		return runing;
 	}
 	
-	public boolean isWaitRequest(){
-		return waitRequest && (downloadThreadPool.getThreadAlive() == 0);
+	public boolean isWorking(){
+		return downloadThreadPool.getThreadAlive() > 0;
 	}
 	
 	public void updateConfig(int thread,Task taskConfig){
@@ -102,9 +100,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 					return;
 				}
 				if (request.getMethod() == HttpRequest.Method.POST){
-					logger.info(String.format("%s Post:%s StatusCode:%s", request.getUrl(), request.getParams(), response.getStatus()));
+					logger.info(String.format("%s %s post:%s status:%s", request.getUrl(), response.getRedirectUrl(), request.getParams(), response.getStatus()));
 				}else{
-					logger.info(String.format("%s StatusCode:%s", request.getUrl(), response.getStatus()));
+					logger.info(String.format("%s %s status:%s", request.getUrl(), response.getRedirectUrl(), response.getStatus()));
 				}
 				if (response instanceof Page){
 					PageProcessor pageProcessor = findPageProcessor(request.getProcessor());
@@ -257,7 +255,6 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		HttpRequest newReq = null;
 		while(newReq == null && runing){
 			newReq = DownloadServer.getInstance().getMasterServer().pollTaskRequest(taskId);
-			waitRequest = (newReq == null);
 		}
 		return newReq;
 	}

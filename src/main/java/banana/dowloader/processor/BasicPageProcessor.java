@@ -17,6 +17,7 @@ import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
 import banana.core.modle.MasterConfig;
 import banana.core.modle.TaskContext;
+import banana.core.modle.TaskError;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.Task.BasicProcessor;
@@ -100,12 +101,9 @@ public class BasicPageProcessor implements PageProcessor {
 			String content = extractor.parseData(content_prepare, page.getContent());
 			if (content == null) {
 				runtimeContext = RuntimeContext.create(page, context);
-				logger.warn(String.format("content prepare error %s", content_prepare));
-				if (logs != null){
-					for (int i = 0; i < logs.length; i++) {
-						logger.info(runtimeContext.parseString(logs[i]));
-					}
-				}
+				TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, new Exception("content prepare error " + index));
+				runtimeContext.copyTo(taskError.runtimeContext);
+				DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
 				if (!keep_down){
 					return null;
 				}
