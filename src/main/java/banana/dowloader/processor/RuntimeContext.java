@@ -16,9 +16,9 @@ import com.github.jknack.handlebars.Template;
 
 import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
-import banana.core.modle.TaskContext;
 import banana.core.request.HttpRequest;
 import banana.core.response.Page;
+import banana.dowloader.impl.RemoteTaskContext;
 
 public final class RuntimeContext implements ContextModle {
 
@@ -30,7 +30,7 @@ public final class RuntimeContext implements ContextModle {
 			public Object apply(Object context, Options options) throws IOException {
 				String path = options.param(0);
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				return runtimeContext.existKey(path);
+				return runtimeContext.existPath(path);
 			}
 		});
 		handlebars.registerHelper("isEmpty", new Helper<Object>() {
@@ -38,7 +38,7 @@ public final class RuntimeContext implements ContextModle {
 			public Object apply(Object context, Options options) throws IOException {
 				String path = options.param(0);
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				return !runtimeContext.existKey(path);
+				return !runtimeContext.existPath(path);
 			}
 		});
 		handlebars.registerHelper("containString", new Helper<Object>() {
@@ -56,7 +56,9 @@ public final class RuntimeContext implements ContextModle {
 		});
 	}
 	
-	private TaskContext taskContext;
+	private ContextModle globalContext;
+	
+	private RemoteTaskContext taskContext;
 
 	private Map<String, Object> requestAttribute;
 
@@ -64,7 +66,7 @@ public final class RuntimeContext implements ContextModle {
 	
 	private Map<String, Object> dataContext;
 	
-	public static final RuntimeContext create(Page page,TaskContext context){
+	public static final RuntimeContext create(Page page,RemoteTaskContext context){
 		RuntimeContext runtimeContext = RuntimeContext.create(page.getRequest(), context);
 		runtimeContext.put("_owner_url", page.getOwnerUrl());
 		runtimeContext.put("_content", page.getContent());
@@ -72,7 +74,7 @@ public final class RuntimeContext implements ContextModle {
 		return runtimeContext;
 	}
 	
-	public static final RuntimeContext create(HttpRequest request,TaskContext context){
+	public static final RuntimeContext create(HttpRequest request, RemoteTaskContext context){
 		Map<String,Object> pageContext = new HashMap<String,Object>();
 		pageContext.put("_url", request.getUrl());
 		List<NameValuePair> pair = request.getNameValuePairs();
@@ -83,13 +85,13 @@ public final class RuntimeContext implements ContextModle {
 		return runtimeContext;
 	}
 
-	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext,TaskContext taskContext) {
+	public RuntimeContext(Map<String, Object> requestAttribute, Map<String, Object> pageContext,RemoteTaskContext taskContext) {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
 		this.taskContext = taskContext;
 	}
 	
-	public boolean existKey(String path) {
+	public boolean existPath(String path) {
 		String[] keys = path.split("\\.");
 		Object value = get(keys[0]);
 		for (int i = 1; i < keys.length; i++) {
@@ -114,7 +116,7 @@ public final class RuntimeContext implements ContextModle {
 	}
 
 	public Object parseObject(String line, Map<String, Object> tempDataContext) throws IOException {
-		if (line.startsWith("{{") && line.endsWith("}}")){
+		if (line.startsWith("{{") && line.endsWith("}}") && !line.contains(" ")){
 			return get(line.substring(2, line.length() -2));
 		}
 		return parseString(line, tempDataContext);
@@ -197,7 +199,7 @@ public final class RuntimeContext implements ContextModle {
 		if (value != null){
 			return value;
 		}
-		return taskContext.getContextAttribute((String) key);
+		return taskContext.get((String) key);
 	}
 
 	public <T> T get(Object key, T defaultValue) {

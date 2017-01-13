@@ -14,14 +14,14 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
 import banana.core.download.HttpDownloader;
+import banana.core.modle.BasicWritable;
 import banana.core.modle.CrawlData;
 import banana.core.modle.MasterConfig;
-import banana.core.modle.TaskContext;
 import banana.core.modle.TaskError;
+import banana.core.modle.Task.BasicProcessor;
+import banana.core.modle.Task.BasicProcessor.BlockCondition;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
-import banana.core.protocol.Task.BasicProcessor;
-import banana.core.protocol.Task.BasicProcessor.BlockCondition;
 import banana.core.request.HttpRequest;
 import banana.core.response.Page;
 import banana.core.util.SimpleMailSender;
@@ -29,6 +29,7 @@ import banana.core.util.SystemUtil;
 import banana.dowloader.config.DataExtractorConfig;
 import banana.dowloader.impl.DownloadServer;
 import banana.dowloader.impl.DownloadTracker;
+import banana.dowloader.impl.RemoteTaskContext;
 
 public class BasicPageProcessor implements PageProcessor {
 
@@ -49,6 +50,8 @@ public class BasicPageProcessor implements PageProcessor {
 	protected Map<String, DataExtractorConfig> page_context_define;
 
 	protected Map<String, DataExtractorConfig> task_context_define;
+	
+	protected Map<String, DataExtractorConfig> global_context_define;
 	
 	protected String[] logs;
 	
@@ -88,19 +91,27 @@ public class BasicPageProcessor implements PageProcessor {
 			}
 		}
 		
+		if (proConfig.global_context != null) {
+			global_context_define = new HashMap<String, DataExtractorConfig>();
+			for (Entry<String, Object> entry : proConfig.global_context.entrySet()) {
+				global_context_define.put(entry.getKey(), new DataExtractorConfig(entry.getValue()));
+			}
+		}
+		
 		this.logs = proConfig.logs;
 		
 		this.blockConditions = proConfig.blockConditions;
 	}
 
 	@Override
-	public RuntimeContext process(Page page, TaskContext context, List<HttpRequest> queue,
+	public RuntimeContext process(Page page, Object taskContext, List<HttpRequest> queue,
 			List<CrawlData> objectContainer) throws Exception {
 		RuntimeContext runtimeContext = null;
+		RemoteTaskContext remoteTaskContext = (RemoteTaskContext) taskContext;
 		if (content_prepare != null) {
 			String content = extractor.parseData(content_prepare, page.getContent());
 			if (content == null) {
-				runtimeContext = RuntimeContext.create(page, context);
+				runtimeContext = RuntimeContext.create(page, remoteTaskContext);
 				TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, new Exception("content prepare error " + index));
 				runtimeContext.copyTo(taskError.runtimeContext);
 				DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
@@ -112,7 +123,7 @@ public class BasicPageProcessor implements PageProcessor {
 				page.setContent(content);
 			}
 		}
-		runtimeContext = runtimeContext == null?RuntimeContext.create(page, context):runtimeContext;
+		runtimeContext = runtimeContext == null?RuntimeContext.create(page, remoteTaskContext):runtimeContext;
 		if (page_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
 			for (Entry<String, DataExtractorConfig> entry : page_context_define.entrySet()) {
 				DataExtractorConfig dataExtratorConfig = entry.getValue();
@@ -132,6 +143,54 @@ public class BasicPageProcessor implements PageProcessor {
 					}
 				} else {
 					runtimeContext.put(entry.getKey(), value);
+				}
+			}
+		}
+		if (task_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
+			for (Entry<String, DataExtractorConfig> entry : task_context_define.entrySet()) {
+				DataExtractorConfig dataExtratorConfig = entry.getValue();
+				String value = extractor.parseData(dataExtratorConfig.parseConfig, page.getContent());
+				if (value == null) {
+					logger.warn(String.format("page context parse error %s %s", dataExtratorConfig.parseConfig, page.getRequest().getUrl()));
+					continue;
+				}
+				if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+					JSON jsonValue = (JSON) JSON.parse(value);
+					writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
+					if (dataExtratorConfig.unique != null) {
+						jsonValue = filter(jsonValue, dataExtratorConfig.unique);
+					}
+					if (jsonValue != null) {
+						remoteTaskContext.put(entry.getKey(), jsonValue);
+					}
+				} else {
+					remoteTaskContext.put(entry.getKey(), value);
+				}
+			}
+		}
+		if (global_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
+			for (Entry<String, DataExtractorConfig> entry : global_context_define.entrySet()) {
+				DataExtractorConfig dataExtratorConfig = entry.getValue();
+				String value = extractor.parseData(dataExtratorConfig.parseConfig, page.getContent());
+				if (value == null) {
+					logger.warn(String.format("page context parse error %s %s", dataExtratorConfig.parseConfig, page.getRequest().getUrl()));
+					continue;
+				}
+				if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+					JSON jsonValue = (JSON) JSON.parse(value);
+					writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
+					if (dataExtratorConfig.unique != null) {
+						jsonValue = filter(jsonValue, dataExtratorConfig.unique);
+					}
+					if (jsonValue != null) {
+						DownloadServer.getInstance().getMasterServer().putGlobalContext(entry.getKey(), new BasicWritable(jsonValue));
+					}
+				} else {
+					if (entry.getKey().startsWith("@value")){
+						DownloadServer.getInstance().getMasterServer().putGlobalContext(value, new BasicWritable(entry.getKey().replace("@value", "").trim()));
+					}else{
+						DownloadServer.getInstance().getMasterServer().putGlobalContext(entry.getKey(), new BasicWritable(value));
+					}
 				}
 			}
 		}

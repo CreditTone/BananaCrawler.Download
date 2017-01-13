@@ -8,8 +8,8 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.gridfs.GridFS;
 import com.mongodb.gridfs.GridFSInputFile;
 
+import banana.core.modle.Task.DownloadProcessor;
 import banana.core.processor.BinaryProcessor;
-import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.response.StreamResponse;
 import banana.dowloader.impl.DownloadServer;
 

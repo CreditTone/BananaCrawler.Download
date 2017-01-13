@@ -16,13 +16,12 @@ import banana.core.download.impl.PhantomJsDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
-import banana.core.modle.TaskContext;
+import banana.core.modle.Task;
 import banana.core.modle.TaskError;
+import banana.core.modle.Task.DownloadProcessor;
 import banana.core.processor.BinaryProcessor;
 import banana.core.processor.PageProcessor;
 import banana.core.protocol.MasterProtocol;
-import banana.core.protocol.Task;
-import banana.core.protocol.Task.DownloadProcessor;
 import banana.core.request.BinaryRequest;
 import banana.core.request.Cookies;
 import banana.core.request.HttpRequest;
@@ -56,7 +55,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private CountableThreadPool downloadThreadPool;
 	
-	private TaskContext taskContext;
+	private RemoteTaskContext taskContext;
 	
 	public DownloadTracker(String taskid,Task taskConfig,Cookies initCookies){
 		taskId = taskid;

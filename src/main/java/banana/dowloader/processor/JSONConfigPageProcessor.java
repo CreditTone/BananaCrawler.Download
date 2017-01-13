@@ -19,12 +19,11 @@ import com.mongodb.DBObject;
 
 import banana.core.download.HttpDownloader;
 import banana.core.modle.CrawlData;
-import banana.core.modle.TaskContext;
 import banana.core.modle.TaskError;
+import banana.core.modle.Task.Processor;
+import banana.core.modle.Task.Processor.Forwarder;
 import banana.core.processor.Extractor;
 import banana.core.processor.PageProcessor;
-import banana.core.protocol.Task.Processor;
-import banana.core.protocol.Task.Processor.Forwarder;
 import banana.core.request.HttpRequest;
 import banana.core.request.PageRequest;
 import banana.core.request.RequestBuilder;
@@ -72,8 +71,8 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 	
 
 	@Override
-	public RuntimeContext process(Page page, TaskContext context, List<HttpRequest> queue, List<CrawlData> objectContainer) throws Exception {
-		RuntimeContext runtimeContext = super.process(page, context, queue, objectContainer);
+	public RuntimeContext process(Page page, Object taskContext, List<HttpRequest> queue, List<CrawlData> objectContainer) throws Exception {
+		RuntimeContext runtimeContext = super.process(page, taskContext, queue, objectContainer);
 		if (runtimeContext == null){
 			return null;
 		}
@@ -168,7 +167,7 @@ public class JSONConfigPageProcessor extends BasicPageProcessor {
 				if (runtimeContext.parseString(fwd.condition).equals("true")){
 					PageProcessor result = downloadTracker.findPageProcessor(fwd.processor);
 					if (result != null){
-						result.process(page, context, queue, objectContainer);
+						result.process(page, taskContext, queue, objectContainer);
 						return runtimeContext;
 					}
 				}
