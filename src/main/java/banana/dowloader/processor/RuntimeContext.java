@@ -10,9 +10,11 @@ import java.util.Set;
 
 import org.apache.http.NameValuePair;
 
+import com.github.jknack.handlebars.Decorator;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.Template;
+import com.sun.jna.platform.win32.WinUser.HHOOK;
 
 import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
@@ -39,6 +41,14 @@ public final class RuntimeContext implements ContextModle {
 				String path = options.param(0);
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
 				return !runtimeContext.existPath(path);
+			}
+		});
+		handlebars.registerHelper("notEmpty", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String path = options.param(0);
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				return runtimeContext.existPath(path);
 			}
 		});
 		handlebars.registerHelper("containString", new Helper<Object>() {
