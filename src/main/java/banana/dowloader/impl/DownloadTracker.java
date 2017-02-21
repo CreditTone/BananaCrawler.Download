@@ -18,9 +18,7 @@ import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
 import banana.core.modle.Task;
 import banana.core.modle.TaskError;
-import banana.core.modle.Task.DownloadProcessor;
-import banana.core.processor.BinaryProcessor;
-import banana.core.processor.PageProcessor;
+import banana.core.processor.DownloadProcessor;
 import banana.core.protocol.MasterProtocol;
 import banana.core.request.BinaryRequest;
 import banana.core.request.Cookies;
@@ -32,8 +30,7 @@ import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
-import banana.dowloader.processor.JSONConfigDownloadProcessor;
-import banana.dowloader.processor.JSONConfigPageProcessor;
+import banana.dowloader.processor.JSONConfigProcessor;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
@@ -47,9 +44,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private boolean stoped = false;
 	
-	private Map<String,PageProcessor> pageProcessors = new HashMap<String,PageProcessor>();
-	
-	private Map<String,BinaryProcessor> binaryProcesors = new HashMap<String,BinaryProcessor>();
+	private Map<String,DownloadProcessor> pageProcessors = new HashMap<String,DownloadProcessor>();
 	
 	private HttpDownloader httpDownloader;
 	
@@ -103,27 +98,12 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				}else{
 					logger.info(String.format("%s %s status:%s", request.getUrl(), response.getRedirectUrl(), response.getStatus()));
 				}
-				if (response instanceof Page){
-					PageProcessor pageProcessor = findPageProcessor(request.getProcessor());
-					if(pageProcessor == null){
-						logger.warn("Not Found PageProcessor Name:" + request.getProcessor());
-						return;
-					}
-					processPage(pageProcessor, (Page) response);
-				}else{
-					BinaryProcessor binaryProcessor = findBinaryProcessor(request.getProcessor());
-					if(binaryProcessor == null){
-						logger.warn("Not Found BinaryProcessor Name:" + request.getProcessor());
-						return;
-					}
-					if (response.getStatus() == 200){
-						try {
-							binaryProcessor.process((StreamResponse)response);
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
+				DownloadProcessor pageProcessor = findConfigProcessor(request.getProcessor());
+				if(pageProcessor == null){
+					logger.warn("Not Found PageProcessor Name:" + request.getProcessor());
+					return;
 				}
+				processResponse(pageProcessor, response);
 			}
 		});
 	}
@@ -143,35 +123,13 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}
 	}
 	
-	private BinaryProcessor findBinaryProcessor(String processor) {
-		BinaryProcessor binaryProcessor = binaryProcesors.get(processor);
-		if(binaryProcessor == null){
-			binaryProcessor = addBinaryProcessor(processor);
-		}
-		return binaryProcessor;
-	}
-
-	private synchronized BinaryProcessor addBinaryProcessor(String processor) {
-		if(binaryProcesors.get(processor) != null){
-			return binaryProcesors.get(processor);
-		}
-		for (DownloadProcessor pro : config.download_processors) {
-			if (pro.index.equals(processor)){
-				BinaryProcessor binaryProcesor = new JSONConfigDownloadProcessor(pro);
-				binaryProcesors.put(processor, binaryProcesor);
-				break;
-			}
-		}
-		return binaryProcesors.get(processor);
-	}
-
-	private synchronized PageProcessor addPageProcessor(String processor) {
+	private synchronized DownloadProcessor addPageProcessor(String processor) {
 		if(pageProcessors.get(processor) != null){
 			return pageProcessors.get(processor);
 		}
 		for (Task.Processor processorConfig : config.processors) {
 			if (processor.equals(processorConfig.index)){
-				JSONConfigPageProcessor processorInstance = new JSONConfigPageProcessor(taskId, processorConfig,httpDownloader);
+				JSONConfigProcessor processorInstance = new JSONConfigProcessor(taskId, processorConfig,httpDownloader);
 				processorInstance.setDownloadTracker(this);
 				pageProcessors.put(processor, processorInstance);
 				break;
@@ -180,8 +138,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		return pageProcessors.get(processor);
 	}
 	
-	public PageProcessor findPageProcessor(String processor) {
-		PageProcessor pageProcessor = pageProcessors.get(processor);
+	public DownloadProcessor findConfigProcessor(String processor) {
+		DownloadProcessor pageProcessor = pageProcessors.get(processor);
 		if(pageProcessor == null){
 			pageProcessor = addPageProcessor(processor);
 		}
@@ -193,17 +151,20 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	 * @param page
 	 * @return
 	 */
-	private final void processPage(final PageProcessor pageProcessor ,final Page page) {
-		int ret = page.getStatus() / 100;
-		PageRequest pr = (PageRequest) page.getRequest();
+	private final void processResponse(final DownloadProcessor pageProcessor ,final HttpResponse response) {
+		int ret = response.getStatus() / 100;
 		ContextModle runtimeContext = null;
 		if (ret == 2){
 			try {
 				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
-				runtimeContext = pageProcessor.process(page,taskContext,newRequests,objectContainer);
-			    for (HttpRequest request : newRequests) {
-					request.baseRequest(page.getRequest());
+			    if (response instanceof Page){
+			    	runtimeContext = pageProcessor.process((Page) response,taskContext,newRequests,objectContainer);
+			    }else{
+			    	runtimeContext = pageProcessor.process((StreamResponse) response, taskContext,newRequests,objectContainer);
+			    }
+				for (HttpRequest request : newRequests) {
+					request.baseRequest(response.getRequest());
 				}
 				handleResult(newRequests,objectContainer);
 			} catch (Exception e) {
@@ -214,15 +175,14 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				try {
 					DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
 				} catch (Exception e1) {}
-				logger.error("离线处理异常URL:"+pr.getUrl(),e);
-				logger.error("离线处理异常Content:"+page.getContent());
+				logger.error("离线处理异常URL:"+response.getRequest().getUrl(),e);
 			}
 		}else{
-			if(page.getRequest().getHistoryCount() < 3){
-				handleResult(Arrays.asList(page.getRequest()), null);
-				logger.warn("重新请求URL:"+ pr.getUrl());
+			if(response.getRequest().getHistoryCount() < 3){
+				handleResult(Arrays.asList(response.getRequest()), null);
+				logger.warn("重新请求URL:"+ response.getRequest().getUrl());
 			}else{
-				logger.error("下载次数超过" + 3 + ":"+pr.getUrl()+" 被丢弃");
+				logger.error("下载次数超过" + 3 + ":"+response.getRequest().getUrl()+" 被丢弃");
 			}
 		}
 	}

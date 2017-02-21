@@ -20,6 +20,7 @@ import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
 import banana.core.request.HttpRequest;
 import banana.core.response.Page;
+import banana.core.response.StreamResponse;
 import banana.dowloader.impl.RemoteTaskContext;
 
 public final class RuntimeContext implements ContextModle {
@@ -81,6 +82,13 @@ public final class RuntimeContext implements ContextModle {
 		runtimeContext.put("_owner_url", page.getOwnerUrl());
 		runtimeContext.put("_content", page.getContent());
 		runtimeContext.put("_status_code", page.getStatus());
+		return runtimeContext;
+	}
+	
+	public static final RuntimeContext create(StreamResponse stream,RemoteTaskContext context){
+		RuntimeContext runtimeContext = RuntimeContext.create(stream.getRequest(), context);
+		runtimeContext.put("_owner_url", stream.getOwnerUrl());
+		runtimeContext.put("_status_code", stream.getStatus());
 		return runtimeContext;
 	}
 	

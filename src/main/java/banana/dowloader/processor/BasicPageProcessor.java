@@ -15,15 +15,17 @@ import com.alibaba.fastjson.JSONObject;
 
 import banana.core.download.HttpDownloader;
 import banana.core.modle.BasicWritable;
+import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
 import banana.core.modle.MasterConfig;
 import banana.core.modle.TaskError;
 import banana.core.modle.Task.BasicProcessor;
 import banana.core.modle.Task.BasicProcessor.BlockCondition;
 import banana.core.processor.Extractor;
-import banana.core.processor.PageProcessor;
+import banana.core.processor.DownloadProcessor;
 import banana.core.request.HttpRequest;
 import banana.core.response.Page;
+import banana.core.response.StreamResponse;
 import banana.core.util.SimpleMailSender;
 import banana.core.util.SystemUtil;
 import banana.dowloader.config.DataExtractorConfig;
@@ -31,7 +33,7 @@ import banana.dowloader.impl.DownloadServer;
 import banana.dowloader.impl.DownloadTracker;
 import banana.dowloader.impl.RemoteTaskContext;
 
-public class BasicPageProcessor implements PageProcessor {
+public class BasicPageProcessor implements DownloadProcessor {
 
 	private static Logger logger = Logger.getLogger(BasicPageProcessor.class);
 	
@@ -269,6 +271,13 @@ public class BasicPageProcessor implements PageProcessor {
 
 	public void setDownloadTracker(DownloadTracker downloadTracker) {
 		this.downloadTracker = downloadTracker;
+	}
+
+	@Override
+	public RuntimeContext process(StreamResponse stream, Object taskContext, List<HttpRequest> queue,
+			List<CrawlData> objectContainer) throws Exception {
+		RemoteTaskContext remoteTaskContext = (RemoteTaskContext) taskContext;
+		return RuntimeContext.create(stream, remoteTaskContext);
 	}
 
 }
