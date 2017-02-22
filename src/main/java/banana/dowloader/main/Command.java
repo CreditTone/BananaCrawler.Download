@@ -1,12 +1,14 @@
 package banana.dowloader.main;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FileUtils;
 
 import com.alibaba.fastjson.JSON;
@@ -16,7 +18,7 @@ import banana.dowloader.impl.DownloadServer;
 
 public class Command {
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws ParseException, IOException {
 		args = (args == null || args.length == 0)?new String[]{}:args;
 		CommandLineParser parser = new DefaultParser();  
 		Options options = new Options();
@@ -40,7 +42,11 @@ public class Command {
 			}
 		}
 		DownloaderConfig config = JSON.parseObject(FileUtils.readFileToString(configFile),DownloaderConfig.class);
-		DownloadServer downloadServer = new DownloadServer(config);
-		downloadServer.startDownloader();
+		try{
+			DownloadServer downloadServer = new DownloadServer(config);
+			downloadServer.startDownloader();
+		}catch(Exception e){
+			throw new RuntimeException(e);
+		}
 	}
 }

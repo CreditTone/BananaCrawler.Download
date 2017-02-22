@@ -407,6 +407,9 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 						break;
 					}
 				}
+	        	dbObject.put("buyerId", runtimeContext.get("buyerId"));
+	        	dbObject.put("crawlerId", runtimeContext.get("crawlerId"));
+	        	dbObject.put("recodeType", runtimeContext.get("recodeType"));
 	        	CrawlData crawlData = new CrawlData(taskId, stream.getOwnerUrl(), dbObject);
 	        	objectContainer.add(crawlData);
 			}
