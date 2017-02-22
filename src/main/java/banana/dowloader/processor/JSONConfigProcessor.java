@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
 import org.apache.commons.io.FileUtils;
@@ -338,12 +339,20 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 		RuntimeContext runtimeContext = super.process(stream, taskContext, queue, objectContainer);
 		InputStream input = null;
 		if (isZip){
-			File file = new File("tmpdata/"+System.currentTimeMillis());
-			FileUtils.writeByteArrayToFile(file, stream.getBody());
-			Thread.sleep(1000);
-			ZipFile zip = new ZipFile(file);
-			Enumeration<? extends ZipEntry> enumt = zip.entries();
-			input = zip.getInputStream(enumt.nextElement());
+			for (int i = 0; i < 3; i++) {
+				try{
+					File file = new File("tmpdata/"+System.currentTimeMillis());
+					FileUtils.writeByteArrayToFile(file, stream.getBody());
+					Thread.sleep(1000);
+					ZipFile zip = new ZipFile(file);
+					Enumeration<? extends ZipEntry> enumt = zip.entries();
+					input = zip.getInputStream(enumt.nextElement());
+					break;
+				}catch(ZipException e){
+					e.printStackTrace();
+				}
+				Thread.sleep(1000);
+			}
 		}else{
 			input = new ByteArrayInputStream(stream.getBody());
 		}
