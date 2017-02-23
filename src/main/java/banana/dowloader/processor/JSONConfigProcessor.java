@@ -356,7 +356,7 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 		}else{
 			input = new ByteArrayInputStream(stream.getBody());
 		}
-		if (csv_datd != null){
+		if (csv_datd != null && input != null){
 			Reader reader = null;
 			reader = new InputStreamReader(input,"GBK");
 	        CSVReader csvReader = new CSVReader(reader);

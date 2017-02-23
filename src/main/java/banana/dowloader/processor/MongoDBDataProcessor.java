@@ -37,11 +37,15 @@ public class MongoDBDataProcessor implements DataProcessor {
 		}
 		DBCollection dbCollection = DownloadServer.getInstance().db.getCollection(collection[0]);
 		for (CrawlData data : objectContainer) {
-			if (data.isUpdate()){
-				dbCollection.update(data.getUpdateQuery(), data.getData(), true, true);
-				logger.info(String.format("update %s %s",collection[0] ,data.getUpdateQuery()));
-			}else{
-				dbCollection.insert(data.getData());
+			try{
+				if (data.isUpdate()){
+					dbCollection.update(data.getUpdateQuery(), data.getData(), true, true);
+					logger.info(String.format("update %s %s",collection[0] ,data.getUpdateQuery()));
+				}else{
+					dbCollection.insert(data.getData());
+				}
+			}catch(Exception e){
+				logger.warn("数据写入错误", e);
 			}
 		}
 	}
