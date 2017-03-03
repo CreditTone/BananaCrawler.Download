@@ -45,7 +45,7 @@ public class MongoDBDataProcessor implements DataProcessor {
 					dbCollection.insert(data.getData());
 				}
 			}catch(Exception e){
-				logger.warn("数据写入错误", e);
+				logger.warn("数据写入错误" + data.getData().toString(), e);
 			}
 		}
 	}
