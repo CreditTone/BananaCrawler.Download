@@ -120,7 +120,9 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 				merger(_data, result);
 				writeTemplates(result, runtimeContext, dataExtractorConfig.templates);
 				if (dataExtractorConfig.unique != null) {
-					result = filter(result, dataExtractorConfig.unique);
+					FilterResult filterResult = filter(result, dataExtractorConfig.unique);
+					runtimeContext.putFilterCount(filterResult.getFilterCount());
+					result = filterResult.getResult();
 				}
 				writeObject(runtimeContext, objectContainer, page.getRequest().getUrl(), result,
 						dataExtractorConfig.update);
@@ -149,7 +151,9 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 									JSONObject jsonObject = new JSONObject();
 									writeTemplates(jsonObject, runtimeContext, requestExtractorConfig.templates);
 									if (requestExtractorConfig.unique != null) {
-										jsonObject = (JSONObject) filter(jsonObject, requestExtractorConfig.unique);
+										FilterResult filterResult = filter(jsonObject, requestExtractorConfig.unique);
+										runtimeContext.putFilterCount(filterResult.getFilterCount());
+										jsonObject = (JSONObject) filterResult.getResult();
 									}
 									if (jsonObject != null) {
 										HttpRequest req = createRequest(runtimeContext, requestExtractorConfig,
@@ -158,7 +162,9 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 											if (requestExtractorConfig.dataContext.data_flow) {
 												req.addAttribute("_data", requestDataArr.get(j));
 											}
-											queue.add(req);
+											if (!containsExclude(requestExtractorConfig.excludes, req.getUrl())){
+												queue.add(req);
+											}
 										}
 									}
 								}
@@ -176,12 +182,18 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 						JSON data = (JSON) JSON.parse(responseJson);
 						writeTemplates(data, runtimeContext, requestExtractorConfig.templates);
 						if (requestExtractorConfig.unique != null) {
-							data = filter(data, requestExtractorConfig.unique);
+							FilterResult filterResult = filter(data, requestExtractorConfig.unique);
+							runtimeContext.putFilterCount(filterResult.getFilterCount());
+							data = filterResult.getResult();
 						}
 						if (data != null) {
 							List<HttpRequest> resps = createRequest(runtimeContext, requestExtractorConfig, data);
 							if (resps != null) {
-								queue.addAll(resps);
+								for (HttpRequest req : resps) {
+									if (!containsExclude(requestExtractorConfig.excludes, req.getUrl())){
+										queue.add(req);
+									}
+								}
 							}
 						}
 					}
@@ -204,6 +216,18 @@ public class JSONConfigProcessor extends BasicPageProcessor {
 			DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
 		}
 		return runtimeContext;
+	}
+	
+	private boolean containsExclude(List<String> excludes,String url){
+		if (excludes == null){
+			return false;
+		}
+		for (String exclude : excludes) {
+			if (url.contains(exclude)){
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private DBObject buildUpdateQuery(Map<String, String> update, RuntimeContext runtimeContext) throws IOException {

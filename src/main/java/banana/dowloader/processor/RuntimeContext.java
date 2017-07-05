@@ -65,6 +65,17 @@ public final class RuntimeContext implements ContextModle {
 				return true;
 			}
 		});
+		handlebars.registerHelper("articleContent", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				String content = (String) runtimeContext.get("_content");
+				String owner_url =  (String) runtimeContext.get("_owner_url");
+				String article_tag = options.param(0);
+				ArticleContent articleContent = new ArticleContent(owner_url, content, article_tag);
+				return articleContent.getArticle().toString();
+			}
+		});
 	}
 	
 	private ContextModle globalContext;
@@ -76,6 +87,10 @@ public final class RuntimeContext implements ContextModle {
 	private Map<String, Object> pageContext;
 	
 	private Map<String, Object> dataContext;
+	
+	protected char filter_index = 'a';
+	
+	public static final String FILTER_PREFIX = "filter_";
 	
 	public static final RuntimeContext create(Page page,RemoteTaskContext context){
 		RuntimeContext runtimeContext = RuntimeContext.create(page.getRequest(), context);
@@ -107,6 +122,11 @@ public final class RuntimeContext implements ContextModle {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
 		this.taskContext = taskContext;
+	}
+	
+	public void putFilterCount(int filterCount){
+		pageContext.put(FILTER_PREFIX + filter_index, filterCount);
+		filter_index ++;
 	}
 	
 	public boolean existPath(String path) {

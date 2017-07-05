@@ -52,6 +52,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private RemoteTaskContext taskContext;
 	
+	private PageEncoding defaultEncoding;
+	
 	public DownloadTracker(String taskid,Task taskConfig,Cookies initCookies){
 		taskId = taskid;
 		config = taskConfig;
@@ -64,6 +66,11 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			httpDownloader = new HtmlUnitDownloader(initCookies);
 		}
 		taskContext = new RemoteTaskContext(taskId);
+		if (config.encoding.equalsIgnoreCase("gbk")){
+			defaultEncoding = PageEncoding.GBK;
+		}else if (config.encoding.equalsIgnoreCase("gb2312")){
+			defaultEncoding = PageEncoding.GB2312;
+		}
 	}
 	
 	public HttpDownloader getHttpDownloader() {
@@ -111,7 +118,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	private final HttpResponse download(HttpRequest request){
 		if (request instanceof PageRequest){
 			final PageRequest pageRequest = (PageRequest) request;
-			if(pageRequest.getPageEncoding()==null){
+			if (defaultEncoding != null){
+				pageRequest.setPageEncoding(defaultEncoding);
+			}else{
 				pageRequest.setPageEncoding(PageEncoding.UTF8);
 			}
 			Page page = httpDownloader.download(pageRequest);

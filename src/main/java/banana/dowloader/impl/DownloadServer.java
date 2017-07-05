@@ -179,7 +179,11 @@ public final class DownloadServer implements DownloadProtocol {
 		for (String taskid : downloadInstance.keySet()) {
 			stopDownloadTracker(taskid);
 		}
-		new Thread(){public void run() {rpcServer.stop();}}.start();
+		new Thread(){
+			public void run() {
+				rpcServer.stop();
+			}
+		}.start();
 	}
 
 	@Override

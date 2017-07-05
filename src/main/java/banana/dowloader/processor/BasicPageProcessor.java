@@ -62,7 +62,7 @@ public class BasicPageProcessor implements DownloadProcessor {
 	protected DownloadTracker downloadTracker;
 	
 	protected boolean keep_down;
-
+	
 	protected BasicPageProcessor(String taskId, BasicProcessor proConfig, Extractor extractor,HttpDownloader downloader) {
 		this.index = proConfig.index;
 		this.taskId = taskId;
@@ -138,7 +138,9 @@ public class BasicPageProcessor implements DownloadProcessor {
 					JSON jsonValue = (JSON) JSON.parse(value);
 					writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
 					if (dataExtratorConfig.unique != null) {
-						jsonValue = filter(jsonValue, dataExtratorConfig.unique);
+						FilterResult filterResult = filter(jsonValue, dataExtratorConfig.unique);
+						runtimeContext.putFilterCount(filterResult.getFilterCount());
+						jsonValue = filterResult.getResult();
 					}
 					if (jsonValue != null) {
 						runtimeContext.put(entry.getKey(), jsonValue);
@@ -160,7 +162,9 @@ public class BasicPageProcessor implements DownloadProcessor {
 					JSON jsonValue = (JSON) JSON.parse(value);
 					writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
 					if (dataExtratorConfig.unique != null) {
-						jsonValue = filter(jsonValue, dataExtratorConfig.unique);
+						FilterResult filterResult = filter(jsonValue, dataExtratorConfig.unique);
+						runtimeContext.putFilterCount(filterResult.getFilterCount());
+						jsonValue = filterResult.getResult();
 					}
 					if (jsonValue != null) {
 						remoteTaskContext.put(entry.getKey(), jsonValue);
@@ -182,7 +186,9 @@ public class BasicPageProcessor implements DownloadProcessor {
 					JSON jsonValue = (JSON) JSON.parse(value);
 					writeTemplates(jsonValue, runtimeContext, dataExtratorConfig.templates);
 					if (dataExtratorConfig.unique != null) {
-						jsonValue = filter(jsonValue, dataExtratorConfig.unique);
+						FilterResult filterResult = filter(jsonValue, dataExtratorConfig.unique);
+						runtimeContext.putFilterCount(filterResult.getFilterCount());
+						jsonValue = filterResult.getResult();
 					}
 					if (jsonValue != null) {
 						DownloadServer.getInstance().getMasterServer().putGlobalContext(entry.getKey(), new BasicWritable(jsonValue));
@@ -239,7 +245,8 @@ public class BasicPageProcessor implements DownloadProcessor {
 		}
 	}
 
-	public final JSON filter(JSON src, List<String> unique) {
+	public final FilterResult filter(JSON src, List<String> unique) {
+		FilterResult fr = new FilterResult();
 		if (src instanceof JSONObject) {
 			JSONObject data = (JSONObject) src;
 			String[] fields = new String[unique.size()];
@@ -248,20 +255,25 @@ public class BasicPageProcessor implements DownloadProcessor {
 			}
 			boolean exists = DownloadServer.getInstance().getMasterServer().filterQuery(taskId, fields).get();
 			if (exists) {
-				return null;
+				fr.setFilterCount(1);
+				return fr;
 			}
-			return data;
+			fr.setResult(data);
+			return fr;
 		} else {
 			JSONArray dataArr = (JSONArray) src;
 			JSONArray ret = new JSONArray();
 			for (int i = 0; i < dataArr.size(); i++) {
 				JSONObject item = dataArr.getJSONObject(i);
-				item = (JSONObject) filter(item, unique);
-				if (item != null) {
-					ret.add(item);
+				FilterResult filterResultItem = filter(item, unique);
+				if (filterResultItem.getFilterCount() == 0) {
+					ret.add(filterResultItem.getResult());
+				}else{
+					fr.setFilterCount(fr.getFilterCount()+1);
 				}
 			}
-			return ret;
+			fr.setResult(ret);
+			return fr;
 		}
 	}
 

@@ -33,6 +33,8 @@ public class RequestExtractorConfig {
 	
 	public int priority;
 	
+	public List<String> excludes;
+	
 	public RequestExtractorConfig(HashMap<String, Object> config) {
 		condition = (String) config.get("_condition");
 		processor = (String) config.get("processor");
@@ -53,13 +55,16 @@ public class RequestExtractorConfig {
 				headers.put(entry.getKey(), (String)entry.getValue());
 			}
 		}
+		if(config.containsKey("exclude")){
+			excludes = (List<String>) config.get("excludes");
+		}
 		if (config.containsKey("priority")){
 			priority = (int) config.get("priority");
 		}
 		if (config.containsKey("_datacontext")){
 			dataContext = new DataContext((Map<String, Object>) config.get("_datacontext"));
 		}
-		if (config.containsKey("_unique") && (boolean) config.get("_unique")){
+		if (config.containsKey("_unique") && config.get("_unique") != null){
 			unique = Arrays.asList("url");
 		}
 		Map<String,Object> bodyConfig = new HashMap<String,Object>();
