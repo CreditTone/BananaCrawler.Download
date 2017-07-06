@@ -1,19 +1,15 @@
 package banana.dowloader.processor;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import banana.core.download.impl.DefaultHttpDownloader;
-import banana.core.request.PageRequest;
-import banana.core.request.PageRequest.PageEncoding;
-import banana.core.request.RequestBuilder;
-
-
 public class ArticleContent {
-	
-	private String url;
 	
 	private String baseUrl;
 	
@@ -25,8 +21,9 @@ public class ArticleContent {
 	
 	private String lastAppend ;
 	
+	private List<ArticleUrl> articleUrls = new ArrayList<>();
+	
 	public ArticleContent(String url,String html, String article_tag) {
-		this.url = url;
 		this.baseUrl = url.substring(0, url.indexOf("/", 7));
 		this.html = html;
 		this.article_tag = article_tag;
@@ -36,7 +33,6 @@ public class ArticleContent {
 			System.err.println(article_tag + " 未找到");
 			return;
 		}
-		//System.out.println(element.html());
 		toExtract(element);
 	}
 
@@ -78,7 +74,6 @@ public class ArticleContent {
 		return imgEmpty;
 	}
 
-
 	public String getHtml() {
 		return html;
 	}
@@ -96,11 +91,12 @@ public class ArticleContent {
 	}
 	
 	public void appendUrl(String url){
-		if (url.startsWith("http")){
-			this.article.append(url);
-		}else if (url.startsWith("/")){
-			this.article.append(baseUrl+url);
+		if (url.startsWith("/")){
+			url = baseUrl+url;
 		}
+		ArticleUrl articleUrl = new ArticleUrl(url);
+		this.article.append(articleUrl.getLocalPath());
+		articleUrls.add(articleUrl);
 	}
 
 	public String getArticle() {
@@ -110,13 +106,52 @@ public class ArticleContent {
 		}
 		return cont;
 	}
+	
+	public List<ArticleUrl> getArticleUrls() {
+		return articleUrls;
+	}
 
-//	public static void main(String[] args) {
-//		DefaultHttpDownloader downloader = new DefaultHttpDownloader();
-//		PageRequest request = (PageRequest) new RequestBuilder().setUrl("http://www.51feibao.com/article-view-4498.html").setPageEncoding(PageEncoding.GB2312).build();
-//		String html = downloader.download(request).getContent();
-//		ArticleContent articleContent = new ArticleContent("http://www.fsdpp.cn/yis", html, "#content div.col_main");
-//		System.out.println(articleContent.getArticle());
-//	}
+	public void setArticleUrls(List<ArticleUrl> articleUrls) {
+		this.articleUrls = articleUrls;
+	}
+
+	public class ArticleUrl {
+		
+		private String imageUrl;
+		
+		private String localPath;
+		
+		public ArticleUrl(String imageUrl) {
+			this.imageUrl = imageUrl;
+			String host = baseUrl.split("//")[1];
+			String suffix = ".jpg";
+			if (imageUrl.contains(".png")){
+				suffix = ".png";
+			}else if(imageUrl.contains(".gif")){
+				suffix = ".gif";
+			}else if(imageUrl.contains(".jpeg")){
+				suffix = ".jpeg";
+			}
+			this.localPath = host + "/" + UUID.randomUUID().toString() + suffix;
+			System.out.println(imageUrl + "=" + localPath);
+		}
+		
+		public String getImageUrl() {
+			return imageUrl;
+		}
+
+		public void setImageUrl(String imageUrl) {
+			this.imageUrl = imageUrl;
+		}
+
+		public String getLocalPath() {
+			return localPath;
+		}
+
+		public void setLocalPath(String localPath) {
+			this.localPath = localPath;
+		}
+		
+	}
 
 }

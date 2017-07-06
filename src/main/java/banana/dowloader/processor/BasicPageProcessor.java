@@ -22,8 +22,9 @@ import banana.core.modle.TaskError;
 import banana.core.modle.Task.BasicProcessor;
 import banana.core.modle.Task.BasicProcessor.BlockCondition;
 import banana.core.processor.Extractor;
-import banana.core.processor.DownloadProcessor;
+import banana.core.processor.IProcessor;
 import banana.core.request.HttpRequest;
+import banana.core.response.HttpResponse;
 import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.core.util.SimpleMailSender;
@@ -33,7 +34,7 @@ import banana.dowloader.impl.DownloadServer;
 import banana.dowloader.impl.DownloadTracker;
 import banana.dowloader.impl.RemoteTaskContext;
 
-public class BasicPageProcessor implements DownloadProcessor {
+public class BasicPageProcessor implements IProcessor {
 
 	private static Logger logger = Logger.getLogger(BasicPageProcessor.class);
 	
@@ -106,8 +107,9 @@ public class BasicPageProcessor implements DownloadProcessor {
 	}
 
 	@Override
-	public RuntimeContext process(Page page, Object taskContext, List<HttpRequest> queue,
+	public RuntimeContext process(HttpResponse response, Object taskContext, List<HttpRequest> queue,
 			List<CrawlData> objectContainer) throws Exception {
+		Page page = (Page) response;
 		RuntimeContext runtimeContext = null;
 		RemoteTaskContext remoteTaskContext = (RemoteTaskContext) taskContext;
 		if (content_prepare != null) {
@@ -126,6 +128,7 @@ public class BasicPageProcessor implements DownloadProcessor {
 			}
 		}
 		runtimeContext = runtimeContext == null?RuntimeContext.create(page, remoteTaskContext):runtimeContext;
+		runtimeContext.setQueue(queue);
 		if (page_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
 			for (Entry<String, DataExtractorConfig> entry : page_context_define.entrySet()) {
 				DataExtractorConfig dataExtratorConfig = entry.getValue();
@@ -284,12 +287,12 @@ public class BasicPageProcessor implements DownloadProcessor {
 	public void setDownloadTracker(DownloadTracker downloadTracker) {
 		this.downloadTracker = downloadTracker;
 	}
-
-	@Override
-	public RuntimeContext process(StreamResponse stream, Object taskContext, List<HttpRequest> queue,
-			List<CrawlData> objectContainer) throws Exception {
-		RemoteTaskContext remoteTaskContext = (RemoteTaskContext) taskContext;
-		return RuntimeContext.create(stream, remoteTaskContext);
-	}
+//
+//	@Override
+//	public RuntimeContext process(StreamResponse stream, Object taskContext, List<HttpRequest> queue,
+//			List<CrawlData> objectContainer) throws Exception {
+	// RemoteTaskContext remoteTaskContext = (RemoteTaskContext) taskContext;
+	// return RuntimeContext.create(stream, remoteTaskContext);
+//	}
 
 }

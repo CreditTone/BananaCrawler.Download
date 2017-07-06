@@ -18,7 +18,7 @@ import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
 import banana.core.modle.Task;
 import banana.core.modle.TaskError;
-import banana.core.processor.DownloadProcessor;
+import banana.core.processor.IProcessor;
 import banana.core.protocol.MasterProtocol;
 import banana.core.request.BinaryRequest;
 import banana.core.request.Cookies;
@@ -30,6 +30,7 @@ import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
+import banana.dowloader.processor.DefaultDownloadProcessor;
 import banana.dowloader.processor.JSONConfigProcessor;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
@@ -44,7 +45,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	
 	private boolean stoped = false;
 	
-	private Map<String,DownloadProcessor> pageProcessors = new HashMap<String,DownloadProcessor>();
+	private Map<String,IProcessor> pageProcessors = new HashMap<String,IProcessor>();
+	
+	private IProcessor defaultDownloadProcessor;
 	
 	private HttpDownloader httpDownloader;
 	
@@ -71,6 +74,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}else if (config.encoding.equalsIgnoreCase("gb2312")){
 			defaultEncoding = PageEncoding.GB2312;
 		}
+		defaultDownloadProcessor = new DefaultDownloadProcessor(taskId,taskConfig.download_root);
 	}
 	
 	public HttpDownloader getHttpDownloader() {
@@ -105,12 +109,19 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 				}else{
 					logger.info(String.format("%s %s status:%s", request.getUrl(), response.getRedirectUrl(), response.getStatus()));
 				}
-				DownloadProcessor pageProcessor = findConfigProcessor(request.getProcessor());
-				if(pageProcessor == null){
-					logger.warn("Not Found PageProcessor Name:" + request.getProcessor());
-					return;
-				}
-				processResponse(pageProcessor, response);
+				
+				IProcessor processor = null;
+				if (response instanceof Page){
+					processor = findConfigProcessor(request.getProcessor());
+					if(processor == null){
+						logger.warn("Not Found PageProcessor Name:" + request.getProcessor());
+						return;
+					}
+			    }else{
+			    	processor = defaultDownloadProcessor;
+			    }
+				processResponse(processor, response);
+				
 			}
 		});
 	}
@@ -132,7 +143,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}
 	}
 	
-	private synchronized DownloadProcessor addPageProcessor(String processor) {
+	private synchronized IProcessor addPageProcessor(String processor) {
 		if(pageProcessors.get(processor) != null){
 			return pageProcessors.get(processor);
 		}
@@ -147,8 +158,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		return pageProcessors.get(processor);
 	}
 	
-	public DownloadProcessor findConfigProcessor(String processor) {
-		DownloadProcessor pageProcessor = pageProcessors.get(processor);
+	public IProcessor findConfigProcessor(String processor) {
+		IProcessor pageProcessor = pageProcessors.get(processor);
 		if(pageProcessor == null){
 			pageProcessor = addPageProcessor(processor);
 		}
@@ -160,18 +171,14 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	 * @param page
 	 * @return
 	 */
-	private final void processResponse(final DownloadProcessor pageProcessor ,final HttpResponse response) {
+	private final void processResponse(final IProcessor pageProcessor ,final HttpResponse response) {
 		int ret = response.getStatus() / 100;
 		ContextModle runtimeContext = null;
 		if (ret == 2){
 			try {
 				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
 				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
-			    if (response instanceof Page){
-			    	runtimeContext = pageProcessor.process((Page) response,taskContext,newRequests,objectContainer);
-			    }else{
-			    	runtimeContext = pageProcessor.process((StreamResponse) response, taskContext,newRequests,objectContainer);
-			    }
+			    runtimeContext = pageProcessor.process(response,taskContext,newRequests,objectContainer);
 				for (HttpRequest request : newRequests) {
 					request.baseRequest(response.getRequest());
 				}

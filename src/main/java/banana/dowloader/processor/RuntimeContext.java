@@ -18,10 +18,13 @@ import com.sun.jna.platform.win32.WinUser.HHOOK;
 
 import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
+import banana.core.request.BinaryRequest;
 import banana.core.request.HttpRequest;
+import banana.core.request.RequestBuilder;
 import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.dowloader.impl.RemoteTaskContext;
+import banana.dowloader.processor.ArticleContent.ArticleUrl;
 
 public final class RuntimeContext implements ContextModle {
 
@@ -73,6 +76,14 @@ public final class RuntimeContext implements ContextModle {
 				String owner_url =  (String) runtimeContext.get("_owner_url");
 				String article_tag = options.param(0);
 				ArticleContent articleContent = new ArticleContent(owner_url, content, article_tag);
+				List<ArticleUrl> articleUrls = articleContent.getArticleUrls();
+				for (ArticleUrl articleUrl : articleUrls) {
+					HttpRequest binaryReq = RequestBuilder.custom()
+					.setDownload(articleUrl.getImageUrl(),articleUrl.getLocalPath())
+					.setPriority(999)
+					.build();
+					runtimeContext.queue.add(binaryReq);
+				}
 				return articleContent.getArticle().toString();
 			}
 		});
@@ -89,6 +100,8 @@ public final class RuntimeContext implements ContextModle {
 	private Map<String, Object> dataContext;
 	
 	protected char filter_index = 'a';
+	
+	private List<HttpRequest> queue;
 	
 	public static final String FILTER_PREFIX = "filter_";
 	
@@ -124,6 +137,14 @@ public final class RuntimeContext implements ContextModle {
 		this.taskContext = taskContext;
 	}
 	
+	public List<HttpRequest> getQueue() {
+		return queue;
+	}
+
+	public void setQueue(List<HttpRequest> queue) {
+		this.queue = queue;
+	}
+
 	public void putFilterCount(int filterCount){
 		pageContext.put(FILTER_PREFIX + filter_index, filterCount);
 		filter_index ++;
