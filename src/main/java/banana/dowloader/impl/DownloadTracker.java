@@ -31,7 +31,7 @@ import banana.core.response.StreamResponse;
 import banana.core.util.CountableThreadPool;
 import banana.core.util.SystemUtil;
 import banana.dowloader.processor.DefaultDownloadProcessor;
-import banana.dowloader.processor.JSONConfigProcessor;
+import banana.dowloader.processor.ConfigPageProcessor;
 
 public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTracker{
 	
@@ -68,6 +68,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		}else if (taskConfig.downloader.equals("htmlunit")){
 			httpDownloader = new HtmlUnitDownloader(initCookies);
 		}
+		httpDownloader.setPorxy(taskConfig.proxy);
 		taskContext = new RemoteTaskContext(taskId);
 		if (config.encoding.equalsIgnoreCase("gbk")){
 			defaultEncoding = PageEncoding.GBK;
@@ -118,10 +119,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 						return;
 					}
 			    }else{
-			    	processor = defaultDownloadProcessor;
+			    		processor = defaultDownloadProcessor;
 			    }
 				processResponse(processor, response);
-				
 			}
 		});
 	}
@@ -147,9 +147,9 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		if(pageProcessors.get(processor) != null){
 			return pageProcessors.get(processor);
 		}
-		for (Task.Processor processorConfig : config.processors) {
+		for (Task.PageProcessorConfig processorConfig : config.processors) {
 			if (processor.equals(processorConfig.index)){
-				JSONConfigProcessor processorInstance = new JSONConfigProcessor(taskId, processorConfig,httpDownloader);
+				ConfigPageProcessor processorInstance = new ConfigPageProcessor(taskId, processorConfig,httpDownloader);
 				processorInstance.setDownloadTracker(this);
 				pageProcessors.put(processor, processorInstance);
 				break;
@@ -172,34 +172,24 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 	 * @return
 	 */
 	private final void processResponse(final IProcessor pageProcessor ,final HttpResponse response) {
-		int ret = response.getStatus() / 100;
 		ContextModle runtimeContext = null;
-		if (ret == 2){
+		try {
+			List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
+			List<CrawlData> objectContainer = new ArrayList<CrawlData>();
+		    runtimeContext = pageProcessor.process(response,taskContext,newRequests,objectContainer);
+			for (HttpRequest request : newRequests) {
+				request.baseRequest(response.getRequest());
+			}
+			handleResult(newRequests,objectContainer);
+		} catch (Exception e) {
+			TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, e);
+			if (runtimeContext != null){
+				runtimeContext.copyTo(taskError.runtimeContext);
+			}
 			try {
-				List<HttpRequest> newRequests = new ArrayList<HttpRequest>();
-				List<CrawlData> objectContainer = new ArrayList<CrawlData>();
-			    runtimeContext = pageProcessor.process(response,taskContext,newRequests,objectContainer);
-				for (HttpRequest request : newRequests) {
-					request.baseRequest(response.getRequest());
-				}
-				handleResult(newRequests,objectContainer);
-			} catch (Exception e) {
-				TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, e);
-				if (runtimeContext != null){
-					runtimeContext.copyTo(taskError.runtimeContext);
-				}
-				try {
-					DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
-				} catch (Exception e1) {}
-				logger.error("离线处理异常URL:"+response.getRequest().getUrl(),e);
-			}
-		}else{
-			if(response.getRequest().getHistoryCount() < 3){
-				handleResult(Arrays.asList(response.getRequest()), null);
-				logger.warn("重新请求URL:"+ response.getRequest().getUrl());
-			}else{
-				logger.error("下载次数超过" + 3 + ":"+response.getRequest().getUrl()+" 被丢弃");
-			}
+				DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
+			} catch (Exception e1) {}
+			logger.error("离线处理异常URL:"+response.getRequest().getUrl(),e);
 		}
 	}
 	

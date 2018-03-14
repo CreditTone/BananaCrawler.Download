@@ -1,7 +1,6 @@
 package banana.dowloader.processor;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -10,49 +9,38 @@ import java.util.Set;
 
 import org.apache.http.NameValuePair;
 
-import com.github.jknack.handlebars.Decorator;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.Template;
-import com.sun.jna.platform.win32.WinUser.HHOOK;
 
 import banana.core.ExpandHandlebars;
 import banana.core.modle.ContextModle;
-import banana.core.request.BinaryRequest;
 import banana.core.request.HttpRequest;
-import banana.core.request.RequestBuilder;
 import banana.core.response.Page;
 import banana.core.response.StreamResponse;
 import banana.dowloader.impl.RemoteTaskContext;
-import banana.dowloader.processor.ArticleContent.ArticleUrl;
 
 public final class RuntimeContext implements ContextModle {
 
 	private static final ExpandHandlebars handlebars = new ExpandHandlebars();
 	
 	static{
-		handlebars.registerHelper("existKey", new Helper<Object>() {
+		handlebars.registerHelper("isNull", new Helper<Object>() {
 
 			public Object apply(Object context, Options options) throws IOException {
 				String path = options.param(0);
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				return runtimeContext.existPath(path);
+				Object value = runtimeContext.get(path);
+				return value == null;
 			}
 		});
-		handlebars.registerHelper("isEmpty", new Helper<Object>() {
+		handlebars.registerHelper("notNull", new Helper<Object>() {
 
 			public Object apply(Object context, Options options) throws IOException {
 				String path = options.param(0);
 				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				return !runtimeContext.existPath(path);
-			}
-		});
-		handlebars.registerHelper("notEmpty", new Helper<Object>() {
-
-			public Object apply(Object context, Options options) throws IOException {
-				String path = options.param(0);
-				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				return runtimeContext.existPath(path);
+				Object value = runtimeContext.get(path);
+				return value != null;
 			}
 		});
 		handlebars.registerHelper("containString", new Helper<Object>() {
@@ -66,25 +54,6 @@ public final class RuntimeContext implements ContextModle {
 					}
 				}
 				return true;
-			}
-		});
-		handlebars.registerHelper("articleContent", new Helper<Object>() {
-
-			public Object apply(Object context, Options options) throws IOException {
-				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				String content = (String) runtimeContext.get("_content");
-				String owner_url =  (String) runtimeContext.get("_owner_url");
-				String article_tag = options.param(0);
-				ArticleContent articleContent = new ArticleContent(owner_url, content, article_tag);
-				List<ArticleUrl> articleUrls = articleContent.getArticleUrls();
-				for (ArticleUrl articleUrl : articleUrls) {
-					HttpRequest binaryReq = RequestBuilder.custom()
-					.setDownload(articleUrl.getImageUrl(),articleUrl.getLocalPath())
-					.setPriority(999)
-					.build();
-					runtimeContext.queue.add(binaryReq);
-				}
-				return articleContent.getArticle().toString();
 			}
 		});
 	}
@@ -145,40 +114,30 @@ public final class RuntimeContext implements ContextModle {
 		this.queue = queue;
 	}
 
-	public void putFilterCount(int filterCount){
+	public void putFilterCount(int filterCount) {
 		pageContext.put(FILTER_PREFIX + filter_index, filterCount);
 		filter_index ++;
 	}
 	
-	public boolean existPath(String path) {
-		String[] keys = path.split("\\.");
-		Object value = get(keys[0]);
-		for (int i = 1; i < keys.length; i++) {
-			if (value == null ){
-				break;
-			}
-			if (keys[i].startsWith("[")){
-				int index = Integer.parseInt(keys[i].substring(1, keys[i].length()-1));
-				value = ((List<Object>)value).get(index);
-			}else{
-				value = ((Map<String,Object>)value).get(keys[i]);
-			}
-		}
-		if (value != null){
-			return !value.equals("");
-		}
-		return false;
-	}
-	
 	public Object parseObject(String line) throws IOException {
-		return parseObject(line, null);
-	}
-
-	public Object parseObject(String line, Map<String, Object> tempDataContext) throws IOException {
-		if (line.startsWith("{{") && line.endsWith("}}") && !line.contains(" ")){
+		if (line.startsWith("{{") && line.endsWith("}}") && !line.contains(" ")) {
 			return get(line.substring(2, line.length() -2));
 		}
-		return parseString(line, tempDataContext);
+		return parseString(line);
+	}
+	
+	public Map<String,Object> fillData(Map<String,Object> data) throws IOException {
+		Map<String,Object> data2 = new HashMap<String,Object>();
+		for (Entry<String,Object> item : data.entrySet()) {
+			Object value = item.getValue();
+			if (value instanceof Map) {
+				value = fillData((Map<String, Object>) value);
+			} else if (value instanceof String) {
+				value = parseString((String) value);
+			}
+			data2.put(item.getKey(), value);
+		}
+		return data2;
 	}
 	
 	@Override
@@ -190,21 +149,14 @@ public final class RuntimeContext implements ContextModle {
 		return template.apply(this);
 	}
 	
-	public Object parseString(String line, Map<String, Object> tempDataContext) throws IOException {
-		if (!line.contains("{{")){
-			return line;
-		}
-		Template template = handlebars.compileEscapeInline(line);
-		if (tempDataContext != null){
-			setDataContext(tempDataContext);
-		}
-		return template.apply(this);
-	}
-	
 	public void setDataContext(Map<String, Object> dataContext){
 		this.dataContext = dataContext;
 	}
 	
+	public Map<String, Object> getDataContext() {
+		return dataContext;
+	}
+
 	public void setDataContextNull(){
 		this.dataContext = null;
 	}
@@ -240,9 +192,32 @@ public final class RuntimeContext implements ContextModle {
 	public boolean containsValue(Object value) {
 		return requestAttribute.containsValue(value) || pageContext.containsKey(value);
 	}
+	
+	private Object deepGet(String key) {
+		String[] path = key.split("\\.");
+		Object value = null;
+		for (String stepKey : path) {
+			if (value == null) {
+				value = get(stepKey);
+			}else {
+				if (!(value instanceof Map)) {
+					return null;
+				}
+				Map temp = (Map) value;
+				value = temp.get(stepKey);
+				if (value == null) {
+					return null;
+				}
+			}
+		}
+		return value;
+	}
 
 	@Override
 	public Object get(Object key) {
+		if (((String) key).contains(".")) {
+			return deepGet((String) key);
+		}
 		Object value = null;
 		if (dataContext != null){
 			value = dataContext.get(key);
@@ -300,5 +275,4 @@ public final class RuntimeContext implements ContextModle {
 	public Set<java.util.Map.Entry<String, Object>> entrySet() {
 		throw new UnsupportedOperationException();
 	}
-
 }

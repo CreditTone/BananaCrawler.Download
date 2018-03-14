@@ -28,7 +28,6 @@ import banana.core.modle.DownloaderConfig;
 import banana.core.modle.MasterConfig;
 import banana.core.modle.Task;
 import banana.core.processor.DataProcessor;
-import banana.core.processor.Extractor;
 import banana.core.protocol.MasterProtocol;
 import banana.core.protocol.DownloadProtocol;
 import banana.core.request.Cookies;
@@ -36,11 +35,7 @@ import banana.core.util.SystemUtil;
 import banana.dowloader.processor.MongoDBDataProcessor;
 
 public final class DownloadServer implements DownloadProtocol {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
-
+	
 	private static Logger logger = Logger.getLogger(DownloadServer.class);
 
 	public DownloaderConfig config;
@@ -50,8 +45,6 @@ public final class DownloadServer implements DownloadProtocol {
 	private Server rpcServer;
 
 	public DB db;
-
-	public Extractor extractor;
 
 	public DataProcessor dataProcessor;
 
@@ -68,8 +61,6 @@ public final class DownloadServer implements DownloadProtocol {
 				new InetSocketAddress(config.master.host, config.master.port), new Configuration());
 		MasterConfig masterConfig = master.getMasterConfig();
 		dataProcessor = new MongoDBDataProcessor();
-		extractor = new JsonRpcExtractor(masterConfig.extractor);
-		extractor.parseData("{}", "<html></html>");
 		instance = this;
 		this.config = config;
 		MongoClient client = null;
