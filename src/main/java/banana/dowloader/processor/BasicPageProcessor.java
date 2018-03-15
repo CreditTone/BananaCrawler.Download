@@ -102,12 +102,14 @@ public class BasicPageProcessor implements IProcessor {
 			}
 			if (page.getContent() == null) {
 				logger.warn("内容预处理失败 " + content_prepare._option + " " + content_prepare._expression);
-				return null;
+				if (retryCondition == null) {
+					return null;
+				}
 			}
 		}
 		runtimeContext = runtimeContext == null?RuntimeContext.create(page, remoteTaskContext):runtimeContext;
 		runtimeContext.setQueue(queue);
-		if (page_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
+		if (page.getContent() != null && page_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
 			Map<String,Object> pageContextResult = (Map<String, Object>) Extractor.doExtractor
 					(page.getContent(), page_context_define.extractorConfig, runtimeContext);
 			if (pageContextResult != null) {
@@ -116,7 +118,7 @@ public class BasicPageProcessor implements IProcessor {
 				}
 			}
 		}
-		if (task_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
+		if (page.getContent() != null && task_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
 			Map<String,Object> pageContextResult = (Map<String, Object>) Extractor.doExtractor
 					(page.getContent(), task_context_define.extractorConfig, runtimeContext);
 			if (pageContextResult != null) {
@@ -125,7 +127,7 @@ public class BasicPageProcessor implements IProcessor {
 				}
 			}
 		}
-		if (global_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
+		if (page.getContent() != null && global_context_define != null && !runtimeContext.get(PRO_RUNTIME_PREPARED_ERROR, false)) {
 			Map<String,Object> pageContextResult = (Map<String, Object>) Extractor.doExtractor
 					(page.getContent(), global_context_define.extractorConfig, runtimeContext);
 			if (pageContextResult != null) {
