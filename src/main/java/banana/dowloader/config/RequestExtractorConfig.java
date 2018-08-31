@@ -3,7 +3,6 @@ package banana.dowloader.config;
 import java.util.HashMap;
 import java.util.List;
 
-import banana.core.extractor.ExtractorConfig;
 import banana.core.request.HttpRequest;
 
 public class RequestExtractorConfig {
@@ -22,7 +21,7 @@ public class RequestExtractorConfig {
 	
 	public List<String> excludes;
 	
-	public ExtractorConfig extractorConfig;
+	public HashMap<String, Object> extractorConfig;
 	
 	public RequestExtractorConfig(HashMap<String, Object> config) {
 		config = (HashMap<String, Object>) config.clone();
@@ -37,28 +36,7 @@ public class RequestExtractorConfig {
 		if (config.containsKey("priority")){
 			priority = (int) config.remove("priority");
 		}
-		extractorConfig = new ExtractorConfig(config);
-//		Map<String,Object> bodyConfig = new HashMap<String,Object>();
-//		String urlXpath = (String) config.get("url");
-//		if (urlXpath != null){
-//			if (urlXpath.startsWith("http") || urlXpath.contains("{{")){
-//				templates.put("url", urlXpath);
-//			}else{
-//				bodyConfig.put("url", urlXpath);
-//			}
-//		}
-//		String download = (String) config.get("download");
-//		if (download != null){
-//			if (download.contains("{{")){
-//				templates.put("download", download);
-//			}else{
-//				bodyConfig.put("download", download);
-//			}
-//		}
-//		if (config.containsKey("attribute")){
-//			Object attributeDefine = config.get("attribute");
-//			bodyConfig.put("attribute",attributeDefine);
-//		}
+		extractorConfig = config;
 	}
 
 }

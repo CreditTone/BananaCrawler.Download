@@ -8,11 +8,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.openqa.selenium.support.ui.Sleeper;
 
 import banana.core.download.HttpDownloader;
 import banana.core.download.impl.DefaultHttpDownloader;
 import banana.core.download.impl.HtmlUnitDownloader;
-import banana.core.download.impl.PhantomJsDownloader;
+import banana.core.download.impl.FirefoxDownloader;
 import banana.core.exception.CrawlerMasterException;
 import banana.core.modle.ContextModle;
 import banana.core.modle.CrawlData;
@@ -63,8 +64,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		downloadThreadPool = new CountableThreadPool(taskConfig.thread);
 		if (taskConfig.downloader.equals("default")){
 			httpDownloader = new DefaultHttpDownloader(initCookies);
-		}else if (taskConfig.downloader.equals("phantomjs")){
-			httpDownloader = new PhantomJsDownloader(DownloadServer.getInstance().config.phantomjs, initCookies);
+		}else if (taskConfig.downloader.startsWith("firefox")){
+			httpDownloader = new FirefoxDownloader(taskConfig.downloader.split(";")[1], initCookies);
 		}else if (taskConfig.downloader.equals("htmlunit")){
 			httpDownloader = new HtmlUnitDownloader(initCookies);
 		}
@@ -182,6 +183,7 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			}
 			handleResult(newRequests,objectContainer);
 		} catch (Exception e) {
+			e.printStackTrace();
 			TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.PROCESSOR_ERROR_TYPE, e);
 			if (runtimeContext != null){
 				runtimeContext.copyTo(taskError.runtimeContext);
@@ -215,7 +217,8 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 			if(downloadThreadPool.getIdleThreadCount() > 0){
 				break;//有线程可以工作
 			}
-			Thread.sleep(10);
+			logger.info("等待有线程可以工作");
+			Thread.sleep(1000);
 		}
 		HttpRequest newReq = null;
 		while(newReq == null && runing){
@@ -232,31 +235,39 @@ public class DownloadTracker implements Runnable,banana.core.protocol.DownloadTr
 		runing = true;
 		httpDownloader.open();//打开下载器
 		HttpRequest request = null;
+		
 		while(runing){
 			try{
 				request = pollRequest();
 				if (request != null){
 					asyncInvokeDownload(request);
+				}else {
+					Thread.sleep(1000);
 				}
 			}catch(Exception e){
+				e.printStackTrace();
 				logger.error("轮询队列出错",e);
 				break;
 			}
+			
 		}
-		release();
+		logger.info("拉取请求完成 "+runing);
+		//release();
 	}
 	
 	
 	@Override
 	public void stop(){
+		logger.info("stop 被调用 stoped:"+stoped);
 		runing = false;
-		while(!stoped){
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}
+		release();
+//		while(!stoped){
+//			try {
+//				Thread.sleep(100);
+//			} catch (InterruptedException e) {
+//				e.printStackTrace();
+//			}
+//		}
 	}
 	
 	private void release() {

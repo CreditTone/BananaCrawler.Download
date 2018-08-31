@@ -10,7 +10,7 @@ import org.apache.log4j.Logger;
 import com.mongodb.BasicDBObject;
 
 import banana.core.download.HttpDownloader;
-import banana.core.extractor.Extractor;
+import banana.core.extractor2.Extractor;
 import banana.core.modle.CrawlData;
 import banana.core.modle.TaskError;
 import banana.core.modle.Task.PageProcessorConfig;
@@ -38,8 +38,6 @@ public class ConfigPageProcessor extends BasicPageProcessor {
 
 	private RequestExtractorConfig[] requestParser;
 
-	private Forwarder[] forwarders;
-
 	public ConfigPageProcessor(String taskId, PageProcessorConfig config, HttpDownloader downloader) {
 		super(taskId, config, downloader);
 		if (config.crawler_data != null) {
@@ -54,7 +52,6 @@ public class ConfigPageProcessor extends BasicPageProcessor {
 				requestParser[i] = new RequestExtractorConfig(config.crawler_request[i]);
 			}
 		}
-		this.forwarders = config.forwarders;
 	}
 
 	@Override
@@ -70,7 +67,7 @@ public class ConfigPageProcessor extends BasicPageProcessor {
 			Object dataParseResult = null;
 			if (dataExtractorConfig.condition == null
 					|| runtimeContext.parseString(dataExtractorConfig.condition).equals("true")) {
-				dataParseResult = Extractor.doExtractor(page.getContent(), dataExtractorConfig.extractorConfig, runtimeContext);
+				dataParseResult = Extractor.doComplex(dataExtractorConfig.extractorConfig, page.getContent(), runtimeContext);
 				if (dataParseResult == null) {
 					logger.info(String.format("parsed data is null %s", dataExtractorConfig.extractorConfig));
 					continue;
@@ -95,31 +92,14 @@ public class ConfigPageProcessor extends BasicPageProcessor {
 				}
 				for (Map<String,Object> dataContext : foreachList) {
 					runtimeContext.setDataContext(dataContext);
-					requestParseResult = Extractor.doExtractor(page.getContent(), requestExtractorConfig.extractorConfig, runtimeContext);
+					requestParseResult = Extractor.doComplex(requestExtractorConfig.extractorConfig,page.getContent(), runtimeContext);
 					writeRequestObject(runtimeContext, queue, requestParseResult, requestExtractorConfig);
 					runtimeContext.setDataContextNull();
 				}
 			}else {
-				requestParseResult = Extractor.doExtractor(page.getContent(), requestExtractorConfig.extractorConfig, runtimeContext);
+				requestParseResult = Extractor.doComplex(requestExtractorConfig.extractorConfig, page.getContent(),runtimeContext);
 				writeRequestObject(runtimeContext, queue, requestParseResult, requestExtractorConfig);
 			}
-		}
-		
-
-		if (forwarders != null) {
-			for (Forwarder fwd : forwarders) {
-				if (runtimeContext.parseString(fwd.condition).equals("true")) {
-					IProcessor result = downloadTracker.findConfigProcessor(fwd.processor);
-					if (result != null) {
-						result.process(page, taskContext, queue, objectContainer);
-						return runtimeContext;
-					}
-				}
-			}
-			TaskError taskError = new TaskError(taskId.split("_")[0], taskId, TaskError.FORWORD_ERROR_TYPE,
-					new Exception("no forword on index " + index));
-			runtimeContext.copyTo(taskError.runtimeContext);
-			DownloadServer.getInstance().getMasterServer().errorStash(taskId, taskError);
 		}
 		return runtimeContext;
 	}
@@ -148,8 +128,15 @@ public class ConfigPageProcessor extends BasicPageProcessor {
 				}
 			};
 			String url = (String) item.get("url");
-			if (url ==  null || containsExclude(requestExtractorConfig.excludes, url)) {
+			if (url ==  null || url.trim().isEmpty() || containsExclude(requestExtractorConfig.excludes, url)) {
 				return;
+			}
+			if (url.startsWith("//")) {
+				if ("true".equals(runtimeContext.parseString("{{hasPrefix ._owner_url 'https'}}"))) {
+					url = "https:" + url; 
+				}else {
+					url = "http:" + url;
+				}
 			}
 			if (requestExtractorConfig.filter_field == null || !existsFilterField(requestExtractorConfig.filter_field, item)) {
 				RequestBuilder builder = RequestBuilder.custom()

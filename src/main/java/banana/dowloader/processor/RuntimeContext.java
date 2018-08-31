@@ -9,11 +9,15 @@ import java.util.Set;
 
 import org.apache.http.NameValuePair;
 
+import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
 import com.github.jknack.handlebars.Template;
+import com.huaban.analysis.jieba.JiebaSegmenter;
+import com.huaban.analysis.jieba.SegToken;
+import com.huaban.analysis.jieba.JiebaSegmenter.SegMode;
 
-import banana.core.ExpandHandlebars;
+import banana.core.context.ExpandHandlebars;
 import banana.core.modle.ContextModle;
 import banana.core.request.HttpRequest;
 import banana.core.response.Page;
@@ -22,41 +26,7 @@ import banana.dowloader.impl.RemoteTaskContext;
 
 public final class RuntimeContext implements ContextModle {
 
-	private static final ExpandHandlebars handlebars = new ExpandHandlebars();
-	
-	static{
-		handlebars.registerHelper("isNull", new Helper<Object>() {
-
-			public Object apply(Object context, Options options) throws IOException {
-				String path = options.param(0);
-				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				Object value = runtimeContext.get(path);
-				return value == null;
-			}
-		});
-		handlebars.registerHelper("notNull", new Helper<Object>() {
-
-			public Object apply(Object context, Options options) throws IOException {
-				String path = options.param(0);
-				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				Object value = runtimeContext.get(path);
-				return value != null;
-			}
-		});
-		handlebars.registerHelper("containString", new Helper<Object>() {
-
-			public Object apply(Object context, Options options) throws IOException {
-				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
-				String content = (String) runtimeContext.get("_content");
-				for (int i = 0; i < options.params.length; i++) {
-					if (!content.contains(options.param(i).toString())){
-						return false;
-					}
-				}
-				return true;
-			}
-		});
-	}
+	private final ExpandHandlebars handlebars = new ExpandHandlebars();
 	
 	private ContextModle globalContext;
 	
@@ -104,7 +74,30 @@ public final class RuntimeContext implements ContextModle {
 		this.requestAttribute = requestAttribute;
 		this.pageContext = pageContext;
 		this.taskContext = taskContext;
+		registerHelper("isEmpty", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String path = options.param(0);
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				Object value = runtimeContext.get(path);
+				return value == null;
+			}
+		});
+		registerHelper("isNotEmpty", new Helper<Object>() {
+
+			public Object apply(Object context, Options options) throws IOException {
+				String path = options.param(0);
+				RuntimeContext runtimeContext = (RuntimeContext) options.context.model();
+				Object value = runtimeContext.get(path);
+				return value != null;
+			}
+		});
 	}
+	
+	public void registerHelper(final String name, final Helper<Object> helper) {
+		handlebars.registerHelper(name, helper);
+	}
+	
 	
 	public List<HttpRequest> getQueue() {
 		return queue;
